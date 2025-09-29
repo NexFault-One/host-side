@@ -34,15 +34,32 @@ class LogFile:
 
         return filepath
     
-    def log_json(self, data: list[list[str]]):
+    def sanitize_json(self, data):
+        """
+        Converts all bytes into strings to prevent json errors. Does not affect safe types.
+        """
+        if isinstance(data, bytes):
+            return data.decode("utf-8", "ignore").strip()
+        elif isinstance(data, list):
+            return [self.sanitize_json(values) for values in data]
+        else:
+            return data
+    
+    def log_json(self, params: list[str], data: list[list[str]]):
         """
         Saves all logs (provided in nested array form) in .json format.
         """
 
+        if len(params) != len(data[0]):
+            print ("parameters do not match values.")
+            return None
+
+        sanitized_data = self.sanitize_json(data)
+        decoded_data = [{params[param]: value for param, value in enumerate(row)} for row in sanitized_data]
         timestamp = datetime.now().strftime("%H_%M_%S")
         filepath = Path(LOG_DIR) / f"{self.name}_{timestamp}.json"
+                
 
-        decoded_data = [ {"data": row[0].decode("utf-8", "ignore").strip(), "timestamp": row[1]} for row in data]
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(decoded_data, f, indent=2)
         

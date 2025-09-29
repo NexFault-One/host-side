@@ -17,11 +17,12 @@ def main():
     print ("Device Firmware Information:", testdevice.fw_ver())
     testdata = testdevice.read_buffer(READ_DURATION)
     print (testdata)
+    print (len(testdata[0][0]))
     testdevice.disconnect()
 
     log = logger.LogFile(LOG_FILE_NAME)
-    log.log_csv(["Data", "Timestamp"], testdata)
-    log.log_json(testdata)
+    log.log_csv(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"], testdata)
+    log.log_json(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"], testdata)
 
 if __name__ == "__main__":
     main()

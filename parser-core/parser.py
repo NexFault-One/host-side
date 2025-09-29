@@ -80,8 +80,10 @@ class SerialDevice:
         while time.time() < end_time:
             if self.ser.in_waiting > 0:
                 read_data = self.ser.read(self.ser.in_waiting)
+                hex_data = read_data.hex(" ")
+                ascii_data = read_data.decode("utf-8", "ignore").strip()
                 timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                data.append([read_data, timestamp])
+                data.append([timestamp, len(read_data), hex_data, ascii_data, read_data])
             time.sleep(0.01)
         
         print("Read complete!")
