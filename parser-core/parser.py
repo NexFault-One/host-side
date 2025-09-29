@@ -3,11 +3,14 @@ import time
 from datetime import datetime
 from serial.tools import list_ports
 
+# serial device connection, data read and write logic
 class SerialDevice:
+
     def __init__(self, port: str, baud: int):
         """
-        Initialize serial connection parameters.
+        Initializes serial device with given serial port and baud rate. Collects device description and information.
         """
+
         self.port = port
         self.baud = baud
         self.timeout = 0.1
@@ -22,6 +25,7 @@ class SerialDevice:
         """
         Attempt connection to serial port.
         """
+
         try:
             print(f"Attempting connection to {self.port} with baud {self.baud}")
             self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
@@ -34,36 +38,42 @@ class SerialDevice:
         """
         Verify connection to serial port.
         """
+
         return self.ser is not None and self.ser.is_open
     
     def fw_ver(self):
         """
-        Gets device firmware version. Not yet implemented.
+        Gets device firmware version.
         """
+
+        # Must be implemented firmware side
         return "None"
     
     def bus(self):
         """
-        Returns device hwid for the time being.
+        Returns device hardware ID information.
         """
+
+        # May require firmware support. Currently not feasible with PySerial
         return self.hwid
     
     def features(self):
         """
         Checks features of serial device. Not yet implemented.
         """
-        return "None"
+
+        return 1
     
     def read_buffer(self, duration: float):
         """
         Collect data from the device's buffer and save to an array. Includes timestamp for logging purposes.
         """
+
         if not self.is_connected():
             print("Serial device is not connected.")
             return []
         
         print (f"Reading data on {self.port} for {duration}s")
-        print (self.ser)
         end_time = time.time() + duration
         data = []
 
@@ -74,29 +84,23 @@ class SerialDevice:
                 data.append([read_data, timestamp])
             time.sleep(0.01)
         
-        print("Read complete")
+        print("Read complete!")
         return data
     
+    def write_buffer(data):
+        """
+        Writes bytes to serial.
+        """
+
+        # must be implemented after protobuf
+        return None
+
     def disconnect(self):
         """
         Disconnects serial device.
         """
+
         if self.ser and self.ser.is_open:
             self.ser.close()
             print("Serial connection closed.")
-               
-
-# testing
-def main():
-    testdevice = SerialDevice('COM3', 115200)
-    testdevice.connect()
-    print ("Device connection:", testdevice.is_connected())
-    print ("Device Information:", testdevice.bus())
-    print ("Device Firmware Information:", testdevice.fw_ver())
-    testdata = testdevice.read_buffer(duration=5)
-    for i in testdata:
-        print (i)
-    testdevice.disconnect()
-
-if __name__ == "__main__":
-    main()
+            
