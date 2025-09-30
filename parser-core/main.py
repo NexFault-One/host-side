@@ -3,7 +3,7 @@ import parser
 
 # TODO: edit information as nescessary for your serial device.
 SERIAL_PORT = "COM3"
-BAUD_RATE = "115200"
+BAUD_RATE = 115200
 READ_DURATION = 3
 LOG_FILE_NAME = "testing"
 
@@ -17,7 +17,6 @@ def main():
     print ("Device Firmware Information:", testdevice.fw_ver())
     testdata = testdevice.read_buffer(READ_DURATION)
     print (testdata)
-    print (len(testdata[0][0]))
     testdevice.disconnect()
 
     log = logger.LogFile(LOG_FILE_NAME)
