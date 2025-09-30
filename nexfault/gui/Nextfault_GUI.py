@@ -4,6 +4,9 @@ import serial
 import serial.tools.list_ports
 import dearpygui.dearpygui as dpg
 
+from nexfault.core.parser import SerialDevice
+from nexfault.core.logger import LogFile
+
 ser = None   # global serial object
 running = False  # background reader flag
 
