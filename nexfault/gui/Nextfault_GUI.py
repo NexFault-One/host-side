@@ -129,7 +129,95 @@ def connect_callback():
         dpg.set_value("status_text", "Disconnected")
         dpg.configure_item("status_text", color=(200, 0, 0))
 
+# -----------------
+# Capture & Save
+# -----------------
+def _make_row(chunk: bytes, ts: str):
+    return [ts, len(chunk), chunk.hex(" "), chunk.decode("utf-8", "ignore").strip(), chunk]
 
+def _ui_get(tag, default):
+    try:
+        return dpg.get_value(tag)
+    except Exception:
+        return default
+
+def _capture_backend(duration_s: int, run_name: str):
+    """Pause reader, capture for N seconds, save CSV/JSON, resume reader."""
+    global ser, running
+    try:
+        # stop background loop
+        running = False
+        time.sleep(0.2)
+
+        ui_port = _ui_get("port_dropdown", "Simulated Device")
+        simulated = str(ui_port).strip().lower().startswith("simulated")
+        baud = int(_ui_get("baud_dropdown", "115200") or "115200")
+
+        dpg.add_text(f"[Capture] {('Simulated' if simulated else 'Real')} • {duration_s}s • run={run_name}", parent="log_window")
+        dpg.set_y_scroll("log_window", -1)
+
+        rows = []
+
+        if simulated:
+            # use backend to generate fake rows (no hardware)
+            dev = SerialDevice("FAKE", baud)
+            dev.connect()
+            if not dev.is_connected():
+                dpg.add_text("[Capture] Simulated device failed to connect", parent="log_window")
+                return
+            rows = dev.read_buffer(duration_s)
+            dev.disconnect()
+        else:
+            # read directly from the already-open 'ser' so we don't fight the port
+            if ser is None or not ser.is_open:
+                dpg.add_text("[Capture] Port not open", parent="log_window")
+                return
+            old_timeout = ser.timeout
+            ser.timeout = 0.1
+            end = time.time() + duration_s
+            from datetime import datetime
+            try:
+                while time.time() < end:
+                    chunk = ser.read(256)
+                    if chunk:
+                        ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                        rows.append(_make_row(chunk, ts))
+            finally:
+                ser.timeout = old_timeout
+
+        # save logs
+        lf = LogFile((run_name or "run").strip() or "run")
+        headers = ["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"]
+        csv_path = lf.log_csv(headers, rows)
+        json_path = lf.log_json(headers, rows)
+
+        dpg.add_text(f"[Capture] Saved CSV: {csv_path}", parent="log_window")
+        dpg.add_text(f"[Capture] Saved JSON: {json_path}", parent="log_window")
+        dpg.set_y_scroll("log_window", -1)
+
+    except Exception as e:
+        dpg.add_text(f"[Capture][Error] {e}", parent="log_window")
+        dpg.set_y_scroll("log_window", -1)
+    finally:
+        # resume reader loop if connected
+        sim_again = str(_ui_get("port_dropdown", "")).strip().lower().startswith("simulated")
+        running = True
+        threading.Thread(target=reader_loop, args=(sim_again,), daemon=True).start()
+
+def start_capture_callback():
+    # robust reads of UI fields
+    run_name = (_ui_get("run_name_input", "run") or "run").strip()
+    dur_val  = _ui_get("duration_input", 10)
+    try:
+        duration_s = int(str(dur_val)) if str(dur_val).strip() else 10
+    except Exception:
+        duration_s = 10
+
+    dpg.add_text(f"[UI] Capture clicked (dur={duration_s}, run={run_name})", parent="log_window")
+    dpg.set_y_scroll("log_window", -1)
+
+    threading.Thread(target=_capture_backend, args=(duration_s, run_name), daemon=True).start()
+            
 # -----------------
 # Populate Ports
 # -----------------
@@ -156,6 +244,12 @@ with dpg.window(label="Serial Monitor", width=580, height=430, pos=(10, 10)):
         dpg.add_combo(("9600", "57600", "115200"), default_value="9600", tag="baud_dropdown", width=100)
 
         dpg.add_button(label="Connect", callback=connect_callback)
+        dpg.add_spacer(width=12)
+        dpg.add_text("Run:")
+        dpg.add_input_text(hint="run name", tag="run_name_input", width=150, default_value="run")
+        dpg.add_text("Duration:")
+        dpg.add_input_int(tag="duration_input", width=70, min_value=1, default_value=10)
+        dpg.add_button(label="Capture & Save", width=140, callback=start_capture_callback)
 
     dpg.add_spacer(height=10)
     dpg.add_separator()

@@ -1,5 +1,7 @@
 import serial
+import random
 import time
+import os
 from datetime import datetime
 from serial.tools import list_ports
 
@@ -16,10 +18,16 @@ class SerialDevice:
         self.timeout = 0.1
         self.ser = None
 
+        self._simulate = (str(port).upper() == "FAKE") # For hardwareless integration testing
+
         for port in list_ports.comports():
             if port.device == self.port:
                 self.description = port.description
                 self.hwid = port.hwid
+        
+        if self._simulate:
+            self.description = "Fake Serial (simulated)"
+            self.hwid = "SIM-FAKE-PORT"
 
     def connect(self):
         """
@@ -28,6 +36,10 @@ class SerialDevice:
 
         try:
             print(f"Attempting connection to {self.port} with baud {self.baud}")
+            if self._simulate:
+                self.ser = object()
+                print("Connection successful! (simulated)")
+                return
             self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
             print(f"Connection successful!")
         except (OSError, serial.SerialException) as e:
@@ -39,7 +51,7 @@ class SerialDevice:
         Verify connection to serial port.
         """
 
-        return self.ser is not None and self.ser.is_open
+        return (self._simulate and self.ser is not None) or (self.ser is not None and self.ser.is_open)
     
     def fw_ver(self):
         """
@@ -47,7 +59,7 @@ class SerialDevice:
         """
 
         # Must be implemented firmware side
-        return "None"
+        return "sim-0.1" if self._simulate else "None"
     
     def bus(self):
         """
@@ -73,6 +85,9 @@ class SerialDevice:
             print("Serial device is not connected.")
             return []
         
+        if self._simulate:
+            return self._fake_rows(duration)
+
         print (f"Reading data on {self.port} for {duration}s")
         end_time = time.time() + duration
         data = []
@@ -101,8 +116,41 @@ class SerialDevice:
         """
         Disconnects serial device.
         """
+        # Simulated port
+        if getattr(self, "_simulate", False):
+            self.ser = None
+            print("Disconnected (simulated)")
+            return
 
+        # Real port
+        try:
+            if self.ser and getattr(self.ser, "is_open", False):
+                self.ser.close()
+        finally:
+            self.ser = None
         if self.ser and self.ser.is_open:
             self.ser.close()
             print("Serial connection closed.")
             
+# ---------------------------------------------- HELPERS ----------------------------------------------
+    def _fake_rows(self, duration: float):
+        import time
+        from datetime import datetime
+        data = []
+        end_time = time.time() + duration
+        t0 = time.time()
+        while time.time() < end_time:
+            prog = ((time.time() - t0) % 10) / 10.0
+            line = f"PROG:{prog:.2f}\r\n".encode("ascii")
+            # A small binary packet (Modbus-like)
+            pkt = bytes([0x01, 0x03, 0x00, 0x10, 0x00, 0x02, 0xC4, 0x0B])
+
+            for chunk in (line, pkt):
+                hex_data = chunk.hex(" ")
+                ascii_data = chunk.decode("utf-8", "ignore").strip()
+                ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                data.append([ts, len(chunk), hex_data, ascii_data, chunk])
+
+            time.sleep(0.25)
+        print("Read complete! (simulated)")
+        return data
