@@ -56,6 +56,14 @@ class LogFile:
 
         sanitized_data = self.sanitize_json(data)
         decoded_data = [{params[param]: value for param, value in enumerate(row)} for row in sanitized_data]
+
+        # hardcoded string cleanup. This will NOT take effect and remove /r/n if the entry is not named "Data (ASCII)".
+        for entry in decoded_data:
+            if "Data (ASCII)" in entry:
+                val = entry["Data (ASCII)"]
+                if isinstance(val, str):
+                    entry["Data (ASCII)"] = val.replace("\r", "").replace("\n", "")
+
         timestamp = datetime.now().strftime("%H_%M_%S")
         filepath = Path(LOG_DIR) / f"{self.name}_{timestamp}.json"
                 

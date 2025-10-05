@@ -1,0 +1,127 @@
+Timestamp,Length,Data (Hex),Data (ASCII),Data (Raw)
+15:30:09.552,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:09.626,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:09.647,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:09.731,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:09.793,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:09.804,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:09.814,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:09.896,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:09.969,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:09.989,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:10.072,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:10.134,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:10.145,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:10.167,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:10.240,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:10.313,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:10.333,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:10.415,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:10.486,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:10.506,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:10.588,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:10.659,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:10.679,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:10.761,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:10.825,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:10.835,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:10.846,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:10.931,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:10.996,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:11.006,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:11.028,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:11.101,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:11.174,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:11.196,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:11.279,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:11.341,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:11.352,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:11.362,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:11.446,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:11.510,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:11.520,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:11.542,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:11.624,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:11.685,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:11.696,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:11.707,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:11.791,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:11.854,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:11.864,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:11.885,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:11.967,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:12.031,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:12.052,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:12.137,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:12.199,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:12.210,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:12.230,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:12.304,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:12.378,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:12.399,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:12.485,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:12.549,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:12.570,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:12.655,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:12.720,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:12.741,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:12.827,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:12.891,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:12.912,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:12.997,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:13.062,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:13.072,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:13.083,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:13.168,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:13.231,64,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a,"age transmitted !
+*********************************************",b'age transmitted !\r\n*********************************************'
+15:30:13.241,4,2a 2a 0d 0a,**,b'**\r\n'
+15:30:13.262,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'
+15:30:13.336,64,2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 20 54 72 61 6e 73 6d 69 74 74 65 72 20 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a 50 72 6f 74 6f 62 75 66 20 6d 65 73 73,"****************** Transmitter ******************
+Protobuf mess",b'****************** Transmitter ******************\r\nProtobuf mess'
+15:30:13.410,68,61 67 65 20 74 72 61 6e 73 6d 69 74 74 65 64 20 21 0d 0a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 2a 0d 0a,"age transmitted !
+***********************************************",b'age transmitted !\r\n***********************************************\r\n'
+15:30:13.431,13,45 6e 63 6f 64 69 6e 67 2e 2e 2e 0d 0a,Encoding...,b'Encoding...\r\n'

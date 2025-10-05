@@ -1,22 +1,30 @@
 import logger
 import parser
 
+# main script intended to faciliate fast debug of backend code
 # TODO: edit information as nescessary for your serial device.
-SERIAL_PORT = "COM3"
-BAUD_RATE = 115200
-READ_DURATION = 3
-LOG_FILE_NAME = "testing"
+SERIAL_PORT = "COM6" # COM6 = receiver, COM3 = transmitter on Siva PC and esp32 hardware loop
+BAUD_RATE = 9600
+READ_DURATION = 4
+LOG_FILE_NAME = "serial_receiver_oct5"
 
 # script to test functionality of parser-core
 def main():
-    testdevice = parser.SerialDevice(SERIAL_PORT, BAUD_RATE)
 
+    # creates and connects to device
+    testdevice = parser.SerialDevice(SERIAL_PORT, BAUD_RATE)
     testdevice.connect()
     print ("Device connection:", testdevice.is_connected())
     print ("Device Information:", testdevice.bus())
     print ("Device Firmware Information:", testdevice.fw_ver())
+
+    # writetest
+    # testdevice.write_buffer()
     testdata = testdevice.read_buffer(READ_DURATION)
-    print (testdata)
+    
+    for values in testdata:
+        print(values[3])
+        
     testdevice.disconnect()
 
     log = logger.LogFile(LOG_FILE_NAME)

@@ -4,6 +4,8 @@ import time
 import os
 from datetime import datetime
 from serial.tools import list_ports
+import uart_data_pb2
+import struct
 
 # serial device connection, data read and write logic
 class SerialDevice:
@@ -91,7 +93,6 @@ class SerialDevice:
         print (f"Reading data on {self.port} for {duration}s")
         end_time = time.time() + duration
         data = []
-
         while time.time() < end_time:
             if self.ser.in_waiting > 0:
                 read_data = self.ser.read(self.ser.in_waiting)
@@ -104,13 +105,22 @@ class SerialDevice:
         print("Read complete!")
         return data
     
-    def write_buffer(data):
+    def write_buffer(self):
         """
         Writes bytes to serial.
         """
 
-        # must be implemented after protobuf
-        return None
+        # Serial protobuf communication over UART must be implemented firmware-side for this code to work.
+        msg = uart_data_pb2.Error_Message()
+        msg.id = 67
+        msg.payload = '41 but i got 41 bands'
+
+        data = msg.SerializeToString()
+
+        self.ser.write(data)
+        self.ser.flush()
+        print("message written")
+        
 
     def disconnect(self):
         """
