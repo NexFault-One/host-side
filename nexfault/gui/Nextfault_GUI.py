@@ -232,7 +232,7 @@ def get_ports():
 dpg.create_context()
 dpg.create_viewport(title="Serial Monitor", width=600, height=450)
 
-with dpg.window(label="Serial Monitor", width=580, height=430, pos=(10, 10)):
+with dpg.window(label="Serial Monitor", width=1920, height=1080, pos=(10, 10)):
     dpg.add_text("Connection Settings", color=(150, 200, 255))
     dpg.add_separator()
 
