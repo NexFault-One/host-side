@@ -19,12 +19,12 @@ def main():
     print ("Device Firmware Information:", testdevice.fw_ver())
 
     # writetest
-    # testdevice.write_buffer()
+    testdevice.write_buffer()
     testdata = testdevice.read_buffer(READ_DURATION)
     
-    for values in testdata:
-        print(values[3])
-        
+    for element in testdata:
+        print(element[3])
+
     testdevice.disconnect()
 
     log = logger.LogFile(LOG_FILE_NAME)

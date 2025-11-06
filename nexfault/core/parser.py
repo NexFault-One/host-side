@@ -105,21 +105,31 @@ class SerialDevice:
         print("Read complete!")
         return data
     
-    def write_buffer(self):
+    def write_buffer(self, seq_id: int = 1, offset: int = 0, length: int = 1, duration: int = 0):
         """
-        Writes bytes to serial.
+        Writes bytes to serial. sends a byte drop injection.
         """
 
-        # Serial protobuf communication over UART must be implemented firmware-side for this code to work.
-        msg = uart_data_pb2.Error_Message()
-        msg.id = 67
-        msg.payload = '41 but i got 41 bands'
+        # if (not self.is_connected()):
+        #     print ("Serial buffer not initialized.")
+        #     return False
+        
+        # msg = uart_data_pb2.DsiCommand()
+        # msg.cmd = uart_data_pb2.CMD_INJECT
+        # msg.id = uart_data_pb2.id
+        # msg.inj_type = uart_data_pb2.INJ
 
-        data = msg.SerializeToString()
+        # if cmd != inject, inj_type not given
 
-        self.ser.write(data)
-        self.ser.flush()
-        print("message written")
+        # if params -> bytedrop / bit-flip
+
+
+
+        # data = msg.SerializeToString()
+
+        # self.ser.write(data)
+        # self.ser.flush()
+        # print(data)
         
 
     def disconnect(self):

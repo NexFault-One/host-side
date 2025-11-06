@@ -1,0 +1,93 @@
+syntax = "proto3";
+package nxf1.v1;
+
+// Common enums
+enum CommandType {
+  CMD_UNSPECIFIED = 0;
+  CMD_PING        = 1;
+  CMD_INJECT      = 2;
+  CMD_ABORT       = 3;
+  CMD_ARM         = 4;
+}
+
+enum InjectionType {
+  INJ_UNSPECIFIED = 0;
+  INJ_BYTE_DROP   = 1;  // drop N bytes starting at offset
+  INJ_BIT_FLIP    = 2;  // XOR mask over span
+  // add: INJ_DUP_BYTE, INJ_INTER_BYTE_GAP, INJ_BURST_INSERT, INJ_BREAK
+}
+
+enum ExecStatus {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ACCEPTED    = 1;
+  STATUS_REJECTED    = 2;
+  STATUS_RUNNING     = 3;
+  STATUS_DONE        = 4;
+  STATUS_ERROR       = 5;
+}
+
+enum TestVerdict {
+  VERDICT_UNSET = 0;
+  VERDICT_PASS  = 1;
+  VERDICT_FAIL  = 2;
+}
+
+// Host -> DSI
+message DsiCommand {
+  uint32 proto_version   = 1;   // e.g., 1
+  uint32 id              = 2;   // your correlation/sequence id
+  CommandType cmd        = 3;   // inject, abort, ping, cmd_inject for bytedrop and bitflip
+  InjectionType inj_type = 4;   // required if cmd == CMD_INJECT
+  uint32 channel         = 5;   // bus/port if you have more than one
+  uint32 duration_ms     = 6;   // 0 means “until complete/next command”
+
+  oneof params {
+    ByteDropParams byte_drop = 10;
+    BitFlipParams  bit_flip  = 11;
+    // DuplicateByteParams dup_byte = 12;
+    // InterByteGapParams  gap      = 13;
+  }
+}
+
+// Per-injection parameter blocks
+message ByteDropParams {
+  uint32 start_offset = 1;  // where to begin dropping in the stream/frame
+  uint32 length       = 2;  // you just added “any length” – define max
+}
+
+message BitFlipParams {
+  uint32 start_offset = 1;
+  uint32 length       = 2;     // span affected
+  bytes  xor_mask     = 3;     // length bytes; repeat or clip as needed
+}
+
+// DSI/TMI -> Host (immediate ACK)
+message DsiAck {
+  uint32 id         = 1;       // echoes DsiCommand.id
+  ExecStatus status = 2;       // ACCEPTED/REJECTED/RUNNING
+  uint32 error_code = 3;       // 0 if ok; else reason (enum/table in docs)
+}
+
+// DSI/TMI -> Host (final report)
+message TmiReport {
+  uint32 id            = 1;    // echoes DsiCommand.id
+  ExecStatus status    = 2;    // DONE or ERROR
+  TestVerdict verdict  = 3;    // PASS/FAIL if you can decide on-box
+  uint32 ts_start_ms   = 4;    // uptime ms
+  uint32 ts_end_ms     = 5;
+  // basic metrics
+  uint32 bytes_tx      = 6;
+  uint32 bytes_rx      = 7;
+  uint32 bytes_dropped = 8;
+  uint32 bytes_flipped = 9;
+
+  // optional raw telemetry (chunked)
+  TelemetryChunk chunk = 20;
+}
+
+message TelemetryChunk {
+  uint32 chunk_index   = 1;   // 0..N-1
+  uint32 chunk_total   = 2;   // N
+  bytes  payload       = 3;   // bounded (e.g., <= 512B for UART)
+  uint32 crc32         = 4;   // of payload for transport sanity
+}
