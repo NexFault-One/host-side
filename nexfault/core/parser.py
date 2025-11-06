@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 from serial.tools import list_ports
 import uart_data_pb2
+from google.protobuf.message import DecodeError
 import struct
 
 # serial device connection, data read and write logic
@@ -105,31 +106,58 @@ class SerialDevice:
         print("Read complete!")
         return data
     
-    def write_buffer(self, seq_id: int = 1, offset: int = 0, length: int = 1, duration: int = 0):
+    def write_buffer(self, message):
         """
-        Writes bytes to serial. sends a byte drop injection.
+        Writes provided (assumed already serialized) message to buffer, returns write success (true/false)
         """
 
-        # if (not self.is_connected()):
-        #     print ("Serial buffer not initialized.")
-        #     return False
+        if (not self.is_connected()):
+            print ("Serial buffer not initialized.")
+            return False
         
-        # msg = uart_data_pb2.DsiCommand()
-        # msg.cmd = uart_data_pb2.CMD_INJECT
-        # msg.id = uart_data_pb2.id
-        # msg.inj_type = uart_data_pb2.INJ
+        if (not self.valid_message(message)): # may require SerializeToString check
+            print ("provided message is invalid, cannot be written.")
+            return False
 
-        # if cmd != inject, inj_type not given
+        frame = struct.pack("<H", len(message)) + message
+        self.ser.write(frame)
+        self.ser.flush()
+        print(frame)
+        return True
+    
+    def valid_message(self, message):
+        """
+        Checks if provided message is in the valid protobuf structure.
+        """
+        try:
+            value = uart_data_pb2.DsiCommand()
+            value.ParseFromString(message)
+            return True
+        except (DecodeError, Exception):
+            return False
+        
+    # byte drop helper
+    def byte_drop(self, seq_id = 1, start_offset = 0, length = 1, duration = 0):
+        """
+        Creates encoded protobuf message for byte drop injection.
+        """
 
-        # if params -> bytedrop / bit-flip
+        message = uart_data_pb2.DsiCommand()
+        message.proto_version = 1
+        message.id = seq_id
+        message.cmd = uart_data_pb2.CommandType.CMD_INJECT
+        message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
+        message.duration_ms = duration
+        message.byte_drop.start_offset = start_offset
+        message.byte_drop.length = length
 
+        data = message.SerializeToString()
 
+        # if getattr(self, "_simulate", False): #simulate value
+        #     print (f"[SIM TX] {frame.hex(' ')}")
+        #     return 
 
-        # data = msg.SerializeToString()
-
-        # self.ser.write(data)
-        # self.ser.flush()
-        # print(data)
+        return data
         
 
     def disconnect(self):
