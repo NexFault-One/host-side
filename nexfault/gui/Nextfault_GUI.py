@@ -3,6 +3,8 @@ import threading
 import serial
 import serial.tools.list_ports
 import dearpygui.dearpygui as dpg
+import struct  
+import uart_data_pb2  
 
 from nexfault.core.parser import SerialDevice
 from nexfault.core.logger import LogFile
@@ -219,6 +221,93 @@ def start_capture_callback():
     threading.Thread(target=_capture_backend, args=(duration_s, run_name), daemon=True).start()
             
 # -----------------
+# Command Callbacks  
+# -----------------
+def toggle_injection_fields(sender, app_data):
+    """
+    Shows or hides the injection parameter fields based
+    on the main command dropdown selection.
+    """
+    if app_data == "Inject":
+        dpg.configure_item("injection_params_group", show=True)
+    else:
+        dpg.configure_item("injection_params_group", show=False)
+
+def send_command_callback():
+    """
+    Reads the selected command and parameters from the GUI,
+    builds the appropriate Protobuf message, and sends it.
+    """
+    global ser
+
+    if ser is None or not ser.is_open:
+        dpg.add_text("[Command] Error: Not connected", parent="log_window")
+        dpg.set_y_scroll("log_window", -1)
+        return
+
+    try:
+        # Get values from GUI
+        main_command = _ui_get("main_command_dropdown", "Ping")
+        seq_id = int(time.time() * 1000) % 65535 # Use a simple unique-ish ID
+
+        # 1. Create the base Protobuf message
+        message = uart_data_pb2.DsiCommand()
+        message.proto_version = 1
+        message.id = seq_id
+
+        # 2. Populate message based on the selected command
+        if main_command == "Ping":
+            message.cmd = uart_data_pb2.CommandType.CMD_PING
+            dpg.add_text(f"[Command] Sending Ping (id={seq_id})", parent="log_window")
+        
+        elif main_command == "Abort":
+            message.cmd = uart_data_pb2.CommandType.CMD_ABORT
+            dpg.add_text(f"[Command] Sending Abort (id={seq_id})", parent="log_window")
+            
+        elif main_command == "Inject":
+            message.cmd = uart_data_pb2.CommandType.CMD_INJECT
+            
+            # Get injection-specific parameters
+            inj_type = _ui_get("injection_type_dropdown", "Byte Drop")
+            
+            if inj_type == "Byte Drop":
+                start_offset = _ui_get("inject_offset", 0)
+                length = _ui_get("inject_length", 1)
+                duration = _ui_get("inject_duration", 0)
+
+                message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
+                message.duration_ms = duration
+                message.byte_drop.start_offset = start_offset
+                message.byte_drop.length = length
+                
+                dpg.add_text(f"[Command] Sending Inject (Byte Drop, id={seq_id}, offset={start_offset}, len={length}, dur={duration}ms)", parent="log_window")
+            
+            # Add 'elif inj_type == "Bit Flip":' here later
+            
+            else:
+                dpg.add_text(f"[Command] Error: Unknown injection type '{inj_type}'", parent="log_window")
+                return
+        
+        else:
+            dpg.add_text(f"[Command] Error: Unknown command '{main_command}'", parent="log_window")
+            return
+
+        # 3. Serialize and frame the message
+        payload = message.SerializeToString()
+        frame = struct.pack("<H", len(payload)) + payload
+
+        # 4. Send the message
+        ser.write(frame)
+        ser.flush()
+
+        dpg.add_text(f"[Command] Sent {len(frame)} bytes: {frame.hex(' ')}", parent="log_window")
+        dpg.set_y_scroll("log_window", -1)
+
+    except Exception as e:
+        dpg.add_text(f"[Command][Error] {e}", parent="log_window")
+        dpg.set_y_scroll("log_window", -1)
+            
+# -----------------
 # Populate Ports
 # -----------------
 def get_ports():
@@ -250,6 +339,40 @@ with dpg.window(label="Serial Monitor", width=1920, height=1080, pos=(10, 10)):
         dpg.add_text("Duration:")
         dpg.add_input_int(tag="duration_input", width=70, min_value=1, default_value=10)
         dpg.add_button(label="Capture & Save", width=140, callback=start_capture_callback)
+
+    # --- MODIFIED: ADDED NEW COMMAND SECTION ---
+    dpg.add_spacer(height=5)
+    dpg.add_text("Command Control", color=(150, 200, 255))
+    dpg.add_separator()
+    
+    with dpg.group(horizontal=True):
+        dpg.add_text("Command:")
+        dpg.add_combo(
+            items=["Ping", "Abort", "Inject"],
+            tag="main_command_dropdown",
+            default_value="Ping",
+            width=150,
+            callback=toggle_injection_fields  # This callback shows/hides the section below
+        )
+        dpg.add_button(label="Send Command", width=140, callback=send_command_callback)
+
+    # This group is hidden by default and shown by the callback
+    with dpg.group(horizontal=True, tag="injection_params_group", show=False):
+        dpg.add_text("Inject Type:")
+        dpg.add_combo(
+            items=["Byte Drop"], # Add "Bit Flip" here when ready
+            tag="injection_type_dropdown",
+            default_value="Byte Drop",
+            width=150
+        )
+        dpg.add_text("Offset:")
+        dpg.add_input_int(tag="inject_offset", width=70, min_value=0, default_value=0)
+        dpg.add_text("Length:")
+        dpg.add_input_int(tag="inject_length", width=70, min_value=1, default_value=1)
+        dpg.add_text("Duration (ms):")
+        dpg.add_input_int(tag="inject_duration", width=70, min_value=0, default_value=0,
+                          tooltip="0 = until next command")
+    # --- END OF MODIFIED SECTION ---
 
     dpg.add_spacer(height=10)
     dpg.add_separator()
