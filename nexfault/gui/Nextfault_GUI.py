@@ -4,10 +4,9 @@ import serial
 import serial.tools.list_ports
 import dearpygui.dearpygui as dpg
 import struct  
-import uart_data_pb2  
-
+from nexfault import uart_data_pb2  
 from nexfault.core.parser import SerialDevice
-from nexfault.core.logger import LogFile
+from nexfault.logger import LogFile
 
 ser = None   # global serial object
 running = False  # background reader flag
@@ -15,7 +14,7 @@ running = False  # background reader flag
 
 # -----------------
 # Serial Reader Loop
-# -----------------
+# ----------------- 
 def reader_loop(simulated=False):
     global ser, running
     progress = 0.0
@@ -370,8 +369,7 @@ with dpg.window(label="Serial Monitor", width=1920, height=1080, pos=(10, 10)):
         dpg.add_text("Length:")
         dpg.add_input_int(tag="inject_length", width=70, min_value=1, default_value=1)
         dpg.add_text("Duration (ms):")
-        dpg.add_input_int(tag="inject_duration", width=70, min_value=0, default_value=0,
-                          tooltip="0 = until next command")
+        dpg.add_input_int(tag="inject_duration", width=70, min_value=0, default_value=0)
     # --- END OF MODIFIED SECTION ---
 
     dpg.add_spacer(height=10)
