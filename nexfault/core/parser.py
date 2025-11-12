@@ -106,6 +106,28 @@ class SerialDevice:
         print("Read complete!")
         return data
     
+    def check_protobuf(self, data):
+        """
+        Checks if given data is a protobuf message. Takes bytes from serial, attempts parse and identification of data type. returns data type.
+        """
+        # must be implemented
+
+    def try_parse_ack(raw_bytes):
+        msg = uart_data_pb2.DsiAck()
+        try:
+            msg.ParseFromString(raw_bytes)
+            return msg
+        except DecodeError:
+            return None
+    
+    def try_parse_report(raw_bytes):
+        msg = uart_data_pb2.TmiReport()
+        try:
+            msg.ParseFromString(raw_bytes)
+            return msg
+        except DecodeError:
+            return None
+    
     def write_buffer(self, message):
         """
         Writes provided (assumed already serialized) message to buffer, returns write success (true/false)
@@ -135,31 +157,7 @@ class SerialDevice:
             return True
         except (DecodeError, Exception):
             return False
-        
-    # byte drop helper
-    def byte_drop(self, seq_id = 1, start_offset = 0, length = 1, duration = 0):
-        """
-        Creates encoded protobuf message for byte drop injection.
-        """
-
-        message = uart_data_pb2.DsiCommand()
-        message.proto_version = 1
-        message.id = seq_id
-        message.cmd = uart_data_pb2.CommandType.CMD_INJECT
-        message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
-        message.duration_ms = duration
-        message.byte_drop.start_offset = start_offset
-        message.byte_drop.length = length
-
-        data = message.SerializeToString()
-
-        # if getattr(self, "_simulate", False): #simulate value
-        #     print (f"[SIM TX] {frame.hex(' ')}")
-        #     return 
-
-        return data
-        
-
+   
     def disconnect(self):
         """
         Disconnects serial device.
@@ -179,6 +177,53 @@ class SerialDevice:
         if self.ser and self.ser.is_open:
             self.ser.close()
             print("Serial connection closed.")
+
+# ------------------------------------------- INJECTIONS ----------------------------------------------
+
+    def byte_drop(self, seq_id = 1, start_offset = 0, length = 1, duration = 0):
+        """
+        Helper for byte drop injection
+        """
+
+        message = uart_data_pb2.DsiCommand()
+        message.proto_version = 1
+        message.id = seq_id
+        message.cmd = uart_data_pb2.CommandType.CMD_INJECT
+        message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
+        message.duration_ms = duration
+        message.byte_drop.start_offset = start_offset
+        message.byte_drop.length = length
+
+        data = message.SerializeToString()
+
+        # if getattr(self, "_simulate", False): #simulate value
+        #     print (f"[SIM TX] {frame.hex(' ')}")
+        #     return 
+
+        return data
+    
+    def bit_flip(self, seq_id = 1, start_offset = 0, length = 1, xor_mask = 0, duration = 0):
+        """
+        Helper for bit flip injection
+        """
+
+        message = uart_data_pb2.DsiCommand()
+        message.proto_version = 1
+        message.id = seq_id
+        message.cmd = uart_data_pb2.CommandType.CMD_INJECT
+        message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
+        message.duration_ms = duration
+        message.byte_drop.start_offset = start_offset
+        message.byte_drop.length = length
+        message.xor_mask = xor_mask
+
+        data = message.SerializeToString()
+
+        # if getattr(self, "_simulate", False): #simulate value
+        #     print (f"[SIM TX] {frame.hex(' ')}")
+        #     return 
+
+        return data
             
 # ---------------------------------------------- HELPERS ----------------------------------------------
     def _fake_rows(self, duration: float):
