@@ -190,7 +190,6 @@ class SerialDevice:
         message.id = seq_id
         message.cmd = uart_data_pb2.CommandType.CMD_INJECT
         message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
-        message.duration_ms = duration
         message.byte_drop.start_offset = start_offset
         message.byte_drop.length = length
 
@@ -212,7 +211,6 @@ class SerialDevice:
         message.id = seq_id
         message.cmd = uart_data_pb2.CommandType.CMD_INJECT
         message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
-        message.duration_ms = duration
         message.byte_drop.start_offset = start_offset
         message.byte_drop.length = length
         message.xor_mask = xor_mask

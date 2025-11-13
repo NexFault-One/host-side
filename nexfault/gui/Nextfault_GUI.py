@@ -278,7 +278,6 @@ def send_command_callback():
                 duration = _ui_get("inject_duration", 0)
 
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
-                message.duration_ms = duration
                 message.byte_drop.start_offset = start_offset
                 message.byte_drop.length = length
                 
