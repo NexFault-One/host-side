@@ -4,13 +4,15 @@ import serial
 import serial.tools.list_ports
 import dearpygui.dearpygui as dpg
 import struct  
-from nexfault import uart_data_pb2  
+from nexfault.core import uart_data_pb2
 from nexfault.core.parser import SerialDevice
-from nexfault.logger import LogFile
+from nexfault.core.logger import LogFile
+
+# buffer for decoding incoming protobuf frames
+rx_buf = bytearray()
 
 ser = None   # global serial object
 running = False  # background reader flag
-
 
 # -----------------
 # Serial Reader Loop
@@ -35,7 +37,8 @@ def reader_loop(simulated=False):
                 dpg.add_text("[Simulated] Task Complete!", parent="log_window")
                 dpg.set_y_scroll("log_window", -1)
                 running = False
-        else:
+        else: # Real device (COM port)
+            chunk = ser.read(512)
             try:
                 if ser and ser.in_waiting:
                     line = ser.readline().decode(errors="ignore").strip()

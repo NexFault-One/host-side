@@ -4,7 +4,7 @@ import time
 import os
 from datetime import datetime
 from serial.tools import list_ports
-import uart_data_pb2
+from . import uart_data_pb2
 from google.protobuf.message import DecodeError
 import struct
 
