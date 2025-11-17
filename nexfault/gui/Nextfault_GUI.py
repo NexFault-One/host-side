@@ -4,7 +4,7 @@ import serial
 import serial.tools.list_ports
 import dearpygui.dearpygui as dpg
 import struct  
-from nexfault.core import uart_data_pb2
+from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
 from nexfault.core.parser import SerialDevice
 from nexfault.core.logger import LogFile
 
