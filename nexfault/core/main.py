@@ -3,12 +3,11 @@ from . import parser
 
 # main script intended to faciliate fast debug of backend code
 # TODO: edit information as nescessary for your serial device.
-SERIAL_PORT = "COM7" # check device manager / pio for com ports
+SERIAL_PORT = "COM6" # check device manager / pio for com ports
 BAUD_RATE = 9600
-READ_DURATION = 4
-LOG_FILE_NAME = "serial_receiver_oct5"
+READ_DURATION = 3
+LOG_FILE_NAME = "test"
 
-# script to test functionality of parser-core
 def main():
 
     # ---------- create and initiate connection ----------
@@ -21,28 +20,25 @@ def main():
     # ---------- writetest ----------
     print ("attempting write test")
     env = testdevice.byte_drop()
-    if (testdevice.valid_message(env)):
+    if (testdevice.try_parse_command(env) != None):
         print ("valid data provided.")
-        print (env)
+        print (env, type(env))
     else:
         print ("invalid data provided.")
         print (env)
     # testdevice.write_buffer(env)
 
     # ---------- read and return data ----------
-    # print ("attempting read test")
-    # testdata = testdevice.read_buffer(READ_DURATION)
-    
-    # for element in testdata:
-    #     print(element[3])
-
-    # testdevice.disconnect()
+    print ("attempting read test")
+    testdata = testdevice.read_buffer(READ_DURATION)
+    testdata.append(testdevice.log_entry(env))
+    testdevice.disconnect()
 
     # ---------- logging test ----------
-    # print ("attempting log test")
-    # log = logger.LogFile(LOG_FILE_NAME)
-    # log.log_csv(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"], testdata)
-    # log.log_json(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"], testdata)
+    print ("attempting log test")
+    log = logger.LogFile(LOG_FILE_NAME)
+    log.log_csv(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
+    log.log_json(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
 
 if __name__ == "__main__":
     main()

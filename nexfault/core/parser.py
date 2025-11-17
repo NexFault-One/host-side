@@ -83,6 +83,7 @@ class SerialDevice:
         """
         Collect data from the device's buffer and save to an array. Includes timestamp for logging purposes.
         """
+        # must include interrupt / synchronization to prevent incomplete read.
 
         if not self.is_connected():
             print("Serial device is not connected.")
@@ -97,47 +98,21 @@ class SerialDevice:
         while time.time() < end_time:
             if self.ser.in_waiting > 0:
                 read_data = self.ser.read(self.ser.in_waiting)
-                hex_data = read_data.hex(" ")
-                ascii_data = read_data.decode("utf-8", "ignore").strip()
-                timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                data.append([timestamp, len(read_data), hex_data, ascii_data, read_data])
-            time.sleep(0.01)
-        
+                read_log = self.log_entry(read_data)
+                data.append(read_log)
         print("Read complete!")
         return data
     
-    def check_protobuf(self, data):
-        """
-        Checks if given data is a protobuf message. Takes bytes from serial, attempts parse and identification of data type. returns data type.
-        """
-        # must be implemented
-
-    def try_parse_ack(raw_bytes):
-        msg = uart_data_pb2.DsiAck()
-        try:
-            msg.ParseFromString(raw_bytes)
-            return msg
-        except DecodeError:
-            return None
-    
-    def try_parse_report(raw_bytes):
-        msg = uart_data_pb2.TmiReport()
-        try:
-            msg.ParseFromString(raw_bytes)
-            return msg
-        except DecodeError:
-            return None
-    
     def write_buffer(self, message):
         """
-        Writes provided (assumed already serialized) message to buffer, returns write success (true/false)
+        Writes provided (assumed already serialized) protobuf message to buffer, returns write success (true/false)
         """
 
         if (not self.is_connected()):
             print ("Serial buffer not initialized.")
             return False
         
-        if (not self.valid_message(message)): # may require SerializeToString check
+        if (self.try_parse_command(message) == None):
             print ("provided message is invalid, cannot be written.")
             return False
 
@@ -145,17 +120,6 @@ class SerialDevice:
         self.ser.flush()
         print(message)
         return True
-    
-    def valid_message(self, message):
-        """
-        Checks if provided message is in the valid protobuf structure.
-        """
-        try:
-            value = uart_data_pb2.DsiCommand()
-            value.ParseFromString(message)
-            return True
-        except (DecodeError, Exception):
-            return False
    
     def disconnect(self):
         """
@@ -223,6 +187,68 @@ class SerialDevice:
         return data
             
 # ---------------------------------------------- HELPERS ----------------------------------------------
+
+    def log_entry(self, data):
+        """
+        creates formatted entry with given bytes that can be inserted into read arrays.
+        """
+        # must be updated along with read_buffer function
+        data_type = self.serial_data_type(data)
+        if data_type.__module__ == "uart_data_pb2":
+            hex_data = hex(0)
+            ascii_data = f"Protobuf Message: {data_type.__name__}"
+        else:
+            hex_data = data.hex(" ")
+            ascii_data = data.decode("utf-8", "ignore").strip()
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        entry = [timestamp, len(data), hex_data, ascii_data, data, self.serial_data_type(data)]
+        return entry
+    
+    def serial_data_type(self, bytes):
+        """
+        Checks if given data is a protobuf message. Takes bytes from serial, attempts parse and identification of data type. returns protobuf object type or bytes.
+        """
+        # strictly returns message type for debug / analysis. does not handle receiving live ack from firmware.
+        for parsed in (self.try_parse_ack, self.try_parse_report, self.try_parse_command):
+            msg = parsed(bytes)
+            if msg is not None:
+                return type(msg)
+        return type(bytes)
+
+    # need to ensure that each method is isolated to its targeted object type (DsiAck objects should not be able to parse as TmiReport or DsiCommand)
+    def try_parse_ack(self, raw_bytes):
+        """
+        Attempts to parse given message as a DsiAck. Returns decoded message if successful, None if failure
+        """
+        msg = uart_data_pb2.DsiAck()
+        try:
+            msg.ParseFromString(raw_bytes)
+            return msg
+        except DecodeError:
+            return None
+    
+    def try_parse_report(self, raw_bytes):
+        """
+        Attempts to parse given message as a TmiReport. Returns decoded message if successful, None if failure
+        """
+        msg = uart_data_pb2.TmiReport()
+        try:
+            msg.ParseFromString(raw_bytes)
+            return msg
+        except DecodeError:
+            return None
+    
+    def try_parse_command(self, raw_bytes):
+        """
+        Attempts to parse given message as a DsiCommand. Returns decoded message if successful, None if failure
+        """
+        msg = uart_data_pb2.DsiCommand()
+        try:
+            msg.ParseFromString(raw_bytes)
+            return msg
+        except DecodeError:
+            return None
+    
     def _fake_rows(self, duration: float):
         import time
         from datetime import datetime
