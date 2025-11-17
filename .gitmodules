@@ -1,0 +1,3 @@
+[submodule "nexfault/protobuf_msgs"]
+	path = nexfault/protobuf_msgs
+	url = https://github.com/NexFault-One/protobuf_msgs

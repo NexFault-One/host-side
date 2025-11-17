@@ -3,7 +3,7 @@ import parser
 
 # main script intended to faciliate fast debug of backend code
 # TODO: edit information as nescessary for your serial device.
-SERIAL_PORT = "COM6" # COM6 = receiver, COM3 = transmitter on Siva PC and esp32 hardware loop
+SERIAL_PORT = "COM7" # COM6 = receiver, COM3 = transmitter on Siva PC and esp32 hardware loop
 BAUD_RATE = 9600
 READ_DURATION = 4
 LOG_FILE_NAME = "serial_receiver_oct5"
@@ -27,22 +27,22 @@ def main():
     else:
         print ("invalid data provided.")
         print (env)
-    testdevice.write_buffer(env)
+    # testdevice.write_buffer(env)
 
     # ---------- read and return data ----------
-    print ("attempting read test")
-    testdata = testdevice.read_buffer(READ_DURATION)
+    # print ("attempting read test")
+    # testdata = testdevice.read_buffer(READ_DURATION)
     
-    for element in testdata:
-        print(element[3])
+    # for element in testdata:
+    #     print(element[3])
 
-    testdevice.disconnect()
+    # testdevice.disconnect()
 
     # ---------- logging test ----------
-    print ("attempting log test")
-    log = logger.LogFile(LOG_FILE_NAME)
-    log.log_csv(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"], testdata)
-    log.log_json(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"], testdata)
+    # print ("attempting log test")
+    # log = logger.LogFile(LOG_FILE_NAME)
+    # log.log_csv(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"], testdata)
+    # log.log_json(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"], testdata)
 
 if __name__ == "__main__":
     main()

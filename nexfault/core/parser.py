@@ -4,7 +4,7 @@ import time
 import os
 from datetime import datetime
 from serial.tools import list_ports
-from . import uart_data_pb2
+from ..protobuf_msgs.proto_msgs import uart_data_pb2
 from google.protobuf.message import DecodeError
 import struct
 
@@ -141,10 +141,9 @@ class SerialDevice:
             print ("provided message is invalid, cannot be written.")
             return False
 
-        frame = struct.pack("<H", len(message)) + message
-        self.ser.write(frame)
+        self.ser.write(message)
         self.ser.flush()
-        print(frame)
+        print(message)
         return True
     
     def valid_message(self, message):
