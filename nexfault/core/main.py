@@ -1,9 +1,9 @@
-import logger
-import parser
+from . import logger
+from . import parser
 
 # main script intended to faciliate fast debug of backend code
 # TODO: edit information as nescessary for your serial device.
-SERIAL_PORT = "COM7" # COM6 = receiver, COM3 = transmitter on Siva PC and esp32 hardware loop
+SERIAL_PORT = "COM7" # check device manager / pio for com ports
 BAUD_RATE = 9600
 READ_DURATION = 4
 LOG_FILE_NAME = "serial_receiver_oct5"
