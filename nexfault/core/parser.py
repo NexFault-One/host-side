@@ -4,7 +4,7 @@ import time
 import os
 from datetime import datetime
 from serial.tools import list_ports
-from ..protobuf_msgs.proto_msgs import uart_data_pb2
+from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
 from google.protobuf.message import DecodeError
 import struct
 
