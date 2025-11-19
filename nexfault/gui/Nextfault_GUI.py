@@ -3,7 +3,8 @@ import threading
 import serial
 import serial.tools.list_ports
 import dearpygui.dearpygui as dpg
-import struct  
+import struct
+from datetime import datetime
 
 # Correct import based on your submodule structure
 from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
@@ -73,6 +74,120 @@ def reader_loop_uut(simulated=False):
         time.sleep(0.05)
 
 # -----------------
+# Capture & Save Backend
+# -----------------
+def _make_row(chunk: bytes, ts: str):
+    """Helper to format log rows"""
+    return [ts, len(chunk), chunk.hex(" "), chunk.decode("utf-8", "ignore").strip(), chunk]
+
+def _capture_backend(duration_s: int, run_name: str, target: str):
+    """
+    Generic capture backend.
+    target: "DSI" or "UUT"
+    """
+    global ser_dsi, ser_uut, running_dsi, running_uut
+    
+    # Configuration Map
+    if target == "DSI":
+        ser_target = ser_dsi
+        port_tag = "dsi_port"
+        log_window = "log_window_dsi"
+        sim_baud = 9600
+        
+        # Pause DSI loop
+        running_dsi = False
+    else: # UUT
+        ser_target = ser_uut
+        port_tag = "uut_port"
+        log_window = "log_window_uut"
+        sim_baud = 115200
+        
+        # Pause UUT loop
+        running_uut = False
+
+    time.sleep(0.2) # Allow thread to exit
+
+    try:
+        port = dpg.get_value(port_tag)
+        simulated = str(port).strip().lower().startswith("simulated")
+
+        dpg.add_text(f"[Capture] Starting {duration_s}s capture on {target}...", parent=log_window)
+        dpg.set_y_scroll(log_window, -1)
+
+        rows = []
+        
+        # 2. Capture Data
+        if simulated:
+            # Use parser helper to generate fake rows
+            dev = SerialDevice("FAKE", sim_baud)
+            dev.connect()
+            rows = dev.read_buffer(duration_s)
+            dev.disconnect()
+        else:
+            # Read directly from open port
+            if ser_target is None or not ser_target.is_open:
+                dpg.add_text(f"[Capture] Error: {target} Port not open", parent=log_window)
+                return
+
+            end = time.time() + duration_s
+            # Temporarily change timeout for blocking read
+            old_timeout = ser_target.timeout
+            ser_target.timeout = 0.1
+            
+            try:
+                while time.time() < end:
+                    if ser_target.in_waiting:
+                        chunk = ser_target.read(ser_target.in_waiting or 1)
+                        if chunk:
+                            ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                            rows.append(_make_row(chunk, ts))
+            finally:
+                ser_target.timeout = old_timeout
+
+        # 3. Save Logs
+        if rows:
+            # filename: e.g., run_name_DSI_TIMESTAMP
+            full_name = f"{run_name}_{target}"
+            lf = LogFile((full_name).strip())
+            headers = ["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"]
+            
+            csv_path = lf.log_csv(headers, rows)
+            json_path = lf.log_json(headers, rows)
+
+            dpg.add_text(f"[Capture] Saved CSV: {csv_path}", parent=log_window)
+            dpg.add_text(f"[Capture] Saved JSON: {json_path}", parent=log_window)
+        else:
+            dpg.add_text(f"[Capture] No data received from {target}.", parent=log_window)
+
+    except Exception as e:
+        dpg.add_text(f"[Capture Error] {e}", parent=log_window)
+    
+    finally:
+        # 4. Resume background reader
+        sim_again = str(dpg.get_value(port_tag)).strip().lower().startswith("simulated")
+        
+        if target == "DSI":
+            if (ser_dsi and ser_dsi.is_open) or sim_again:
+                running_dsi = True
+                threading.Thread(target=reader_loop_dsi, args=(sim_again,), daemon=True).start()
+            dpg.set_y_scroll("log_window_dsi", -1)
+        else:
+            if (ser_uut and ser_uut.is_open) or sim_again:
+                running_uut = True
+                threading.Thread(target=reader_loop_uut, args=(sim_again,), daemon=True).start()
+            dpg.set_y_scroll("log_window_uut", -1)
+
+def start_capture_dsi_callback():
+    run_name = _ui_get("run_name_dsi", "dsi_run")
+    dur_val = _ui_get("duration_dsi", 5)
+    threading.Thread(target=_capture_backend, args=(dur_val, run_name, "DSI"), daemon=True).start()
+
+def start_capture_uut_callback():
+    run_name = _ui_get("run_name_uut", "uut_run")
+    dur_val = _ui_get("duration_uut", 5)
+    threading.Thread(target=_capture_backend, args=(dur_val, run_name, "UUT"), daemon=True).start()
+
+# -----------------
 # Connection Callbacks
 # -----------------
 def connect_dsi_callback():
@@ -129,14 +244,12 @@ def connect_uut_callback():
 # Command & Injection Logic
 # -----------------
 def toggle_injection_fields(sender, app_data):
-    """Shows/hides parameters based on command type"""
     if app_data == "Inject":
         dpg.configure_item("injection_params_group", show=True)
     else:
         dpg.configure_item("injection_params_group", show=False)
 
 def update_dynamic_fields(sender, app_data):
-    """Switches between Byte Drop fields and Bit Flip fields"""
     if app_data == "Byte Drop":
         dpg.configure_item("byte_drop_group", show=True)
         dpg.configure_item("xor_mask_group", show=False)
@@ -170,7 +283,6 @@ def send_command_callback():
             message.cmd = uart_data_pb2.CommandType.CMD_INJECT
             inj_type = _ui_get("injection_type_dropdown", "Byte Drop")
             
-            # Common Params
             start_offset = _ui_get("inject_offset", 0)
             length = _ui_get("inject_length", 1)
             duration = _ui_get("inject_duration", 0)
@@ -181,7 +293,6 @@ def send_command_callback():
                 message.byte_drop.start_offset = start_offset
                 message.byte_drop.length = length
                 
-                # Retrieve the string field (Currently for UI display only as per proto def)
                 pattern_str = _ui_get("inject_drop_pattern", "")
                 dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')", parent="log_window_dsi")
 
@@ -190,7 +301,6 @@ def send_command_callback():
                 message.bit_flip.start_offset = start_offset
                 message.bit_flip.length = length
                 
-                # Handle XOR Mask string -> bytes
                 mask_str = _ui_get("inject_xor_mask", "FF")
                 try:
                     clean_mask = mask_str.replace(" ", "").replace("0x", "")
@@ -201,7 +311,6 @@ def send_command_callback():
 
                 dpg.add_text(f"[TX] Inject BitFlip (off={start_offset}, len={length}, mask={clean_mask})", parent="log_window_dsi")
 
-        # Serialize and Send
         payload = message.SerializeToString()
         frame = struct.pack("<H", len(payload)) + payload
 
@@ -230,7 +339,7 @@ def _ui_get(tag, default):
 # GUI Setup
 # -----------------
 dpg.create_context()
-dpg.create_viewport(title="NextFault Dashboard", width=1000, height=600)
+dpg.create_viewport(title="NextFault Dashboard", width=1100, height=700)
 
 with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
     
@@ -240,7 +349,8 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
             dpg.add_text("DSI Connection (Control)", color=(100, 255, 100))
             with dpg.group(horizontal=True):
                 dpg.add_combo(get_ports(), tag="dsi_port", width=150, default_value="Select Port")
-                dpg.add_combo(("9600", "115200"), tag="dsi_baud", width=80, default_value="9600")
+                dpg.add_text("Baud:")
+                dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="9600")
                 dpg.add_button(label="Connect DSI", callback=connect_dsi_callback)
             dpg.add_text("Disconnected", tag="dsi_status", color=(200, 50, 50))
         dpg.add_spacer(width=50)
@@ -254,51 +364,31 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
     dpg.add_separator()
     dpg.add_spacer(height=5)
 
-    # --- COMMAND & CONTROL ---
+    # --- COMMAND & INJECTION ---
     dpg.add_text("Injection Control", color=(255, 200, 80))
     with dpg.group(horizontal=True):
         dpg.add_text("Command:")
-        dpg.add_combo(
-            items=["Ping", "Abort", "Inject"],
-            tag="main_command_dropdown",
-            default_value="Ping",
-            width=120,
-            callback=toggle_injection_fields
-        )
+        dpg.add_combo(items=["Ping", "Abort", "Inject"], tag="main_command_dropdown", default_value="Ping", width=120, callback=toggle_injection_fields)
         dpg.add_button(label="SEND", width=100, callback=send_command_callback)
         dpg.add_spacer(width=20)
         dpg.add_progress_bar(tag="progress_bar", default_value=0.0, width=300, overlay="Device Progress")
 
-    # --- INJECTION PARAMETERS (Dynamic) ---
     with dpg.group(tag="injection_params_group", show=False):
         dpg.add_spacer(height=5)
         with dpg.group(horizontal=True):
             dpg.add_text("Type:")
-            dpg.add_combo(
-                items=["Byte Drop", "Bit Flip"], 
-                tag="injection_type_dropdown", 
-                default_value="Byte Drop", 
-                width=120,
-                callback=update_dynamic_fields # Updates fields based on selection
-            )
-            
+            dpg.add_combo(items=["Byte Drop", "Bit Flip"], tag="injection_type_dropdown", default_value="Byte Drop", width=120, callback=update_dynamic_fields)
             dpg.add_text("Offset:")
             dpg.add_input_int(tag="inject_offset", width=80, min_value=0, default_value=0)
-            
             dpg.add_text("Length:")
             dpg.add_input_int(tag="inject_length", width=80, min_value=1, default_value=1)
-
             dpg.add_text("Duration(ms):")
             dpg.add_input_int(tag="inject_duration", width=80, min_value=0, default_value=0)
             
-            # --- DYNAMIC GROUPS ---
-            
-            # 1. String Field for Byte Drop
             with dpg.group(tag="byte_drop_group", show=True, horizontal=True):
                 dpg.add_text("Pattern (String):", color=(255, 200, 100))
                 dpg.add_input_text(tag="inject_drop_pattern", width=120, default_value="", hint="Target String")
 
-            # 2. XOR Mask for Bit Flip
             with dpg.group(tag="xor_mask_group", show=False, horizontal=True):
                 dpg.add_text("XOR Mask (Hex):", color=(255, 100, 100))
                 dpg.add_input_text(tag="inject_xor_mask", width=100, default_value="FF", hint="e.g. FF AA")
@@ -306,9 +396,36 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
     dpg.add_separator()
     dpg.add_spacer(height=5)
 
+    # --- DATA CAPTURE SECTIONS ---
+    with dpg.group(horizontal=True):
+        # DSI Capture Group
+        with dpg.group():
+            dpg.add_text("Data Capture (DSI)", color=(100, 255, 100))
+            with dpg.group(horizontal=True):
+                dpg.add_text("Name:")
+                dpg.add_input_text(tag="run_name_dsi", width=120, default_value="dsi_log", hint="Filename")
+                dpg.add_text("Time(s):")
+                dpg.add_input_int(tag="duration_dsi", width=80, default_value=5, min_value=1)
+                dpg.add_button(label="Capture DSI", callback=start_capture_dsi_callback)
+
+        dpg.add_spacer(width=50)
+
+        # UUT Capture Group
+        with dpg.group():
+            dpg.add_text("Data Capture (UUT)", color=(100, 100, 255))
+            with dpg.group(horizontal=True):
+                dpg.add_text("Name:")
+                dpg.add_input_text(tag="run_name_uut", width=120, default_value="uut_log", hint="Filename")
+                dpg.add_text("Time(s):")
+                dpg.add_input_int(tag="duration_uut", width=80, default_value=5, min_value=1)
+                dpg.add_button(label="Capture UUT", callback=start_capture_uut_callback)
+
+    dpg.add_separator()
+    dpg.add_spacer(height=5)
+
     # --- SPLIT LOG MONITORS ---
     with dpg.group(horizontal=True):
-        with dpg.child_window(width=480, height=-1, border=True):
+        with dpg.child_window(width=520, height=-1, border=True):
             dpg.add_text("--- DSI Serial Log ---", color=(100, 255, 100))
             dpg.add_child_window(tag="log_window_dsi", autosize_x=True, autosize_y=True)
 
