@@ -58,7 +58,7 @@ def reader_loop_uut(simulated=False):
     while running_uut:
         if simulated:
             time.sleep(1.5)
-            msg = f"[UUT Sim] Output {time.strftime('%H:%M:%S')}\n"
+            msg = f"[UUT Sim] Output {time.strftime('%H:%M:%S')}\n\n"
             dpg.add_text(msg, parent="log_window_uut")
             dpg.set_y_scroll("log_window_uut", -1)
         else:
@@ -66,10 +66,11 @@ def reader_loop_uut(simulated=False):
                 if ser_uut and ser_uut.in_waiting:
                     line = ser_uut.readline().decode(errors="ignore").strip()
                     if line:
-                        dpg.add_text(line, parent="log_window_uut")
+                        # --- UPDATED: Added [RX] prefix and \n\n spacing to match DSI ---
+                        dpg.add_text(f"[RX] {line}\n\n", parent="log_window_uut")
                         dpg.set_y_scroll("log_window_uut", -1)
             except Exception as e:
-                dpg.add_text(f"[UUT Error] {e}\n", parent="log_window_uut")
+                dpg.add_text(f"[UUT Error] {e}\n\n", parent="log_window_uut")
                 break
         time.sleep(0.05)
 
@@ -181,10 +182,8 @@ def start_capture_uut_callback():
 # -----------------
 def toggle_dsi_connection():
     global ser_dsi, running_dsi
-    
     current_label = dpg.get_item_label("btn_connect_dsi")
     
-    # --- CONNECT LOGIC ---
     if current_label == "Connect DSI":
         port = dpg.get_value("dsi_port")
         baud = int(dpg.get_value("dsi_baud"))
@@ -200,6 +199,8 @@ def toggle_dsi_connection():
 
         try:
             ser_dsi = serial.Serial(port, baud, timeout=1)
+            ser_dsi.dtr = False 
+            ser_dsi.rts = False
             dpg.set_value("dsi_status", "Connected")
             dpg.configure_item("dsi_status", color=(0, 200, 0))
             dpg.configure_item("btn_connect_dsi", label="Disconnect DSI")
@@ -210,17 +211,15 @@ def toggle_dsi_connection():
             dpg.configure_item("dsi_status", color=(200, 0, 0))
             dpg.add_text(f"[Error] {e}\n\n", parent="log_window_dsi")
 
-    # --- DISCONNECT LOGIC ---
     else:
         running_dsi = False
-        time.sleep(0.1) # Small pause to let thread finish
+        time.sleep(0.1)
         try:
             if ser_dsi and ser_dsi.is_open:
                 ser_dsi.close()
         except:
             pass
         ser_dsi = None
-        
         dpg.set_value("dsi_status", "Disconnected")
         dpg.configure_item("dsi_status", color=(200, 50, 50))
         dpg.configure_item("btn_connect_dsi", label="Connect DSI")
@@ -229,10 +228,8 @@ def toggle_dsi_connection():
 
 def toggle_uut_connection():
     global ser_uut, running_uut
-    
     current_label = dpg.get_item_label("btn_connect_uut")
     
-    # --- CONNECT LOGIC ---
     if current_label == "Connect UUT":
         port = dpg.get_value("uut_port")
         baud = 115200
@@ -248,6 +245,8 @@ def toggle_uut_connection():
 
         try:
             ser_uut = serial.Serial(port, baud, timeout=1)
+            ser_uut.dtr = False
+            ser_uut.rts = False
             dpg.set_value("uut_status", "Connected")
             dpg.configure_item("uut_status", color=(0, 200, 0))
             dpg.configure_item("btn_connect_uut", label="Disconnect UUT")
@@ -256,9 +255,8 @@ def toggle_uut_connection():
         except Exception as e:
             dpg.set_value("uut_status", "Error")
             dpg.configure_item("uut_status", color=(200, 0, 0))
-            dpg.add_text(f"[Error] {e}\n", parent="log_window_uut")
+            dpg.add_text(f"[Error] {e}\n\n", parent="log_window_uut")
 
-    # --- DISCONNECT LOGIC ---
     else:
         running_uut = False
         time.sleep(0.1)
@@ -268,11 +266,10 @@ def toggle_uut_connection():
         except:
             pass
         ser_uut = None
-
         dpg.set_value("uut_status", "Disconnected")
         dpg.configure_item("uut_status", color=(200, 50, 50))
         dpg.configure_item("btn_connect_uut", label="Connect UUT")
-        dpg.add_text("[Info] Disconnected\n", parent="log_window_uut")
+        dpg.add_text("[Info] Disconnected\n\n", parent="log_window_uut")
 
 
 # -----------------
@@ -386,7 +383,6 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
                 dpg.add_combo(get_ports(), tag="dsi_port", width=150, default_value="Select Port")
                 dpg.add_text("Baud:")
                 dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="9600")
-                # CHANGED: Added tag and swapped callback
                 dpg.add_button(label="Connect DSI", tag="btn_connect_dsi", callback=toggle_dsi_connection)
             dpg.add_text("Disconnected", tag="dsi_status", color=(200, 50, 50))
         dpg.add_spacer(width=50)
@@ -394,7 +390,6 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
             dpg.add_text("UUT Connection (Monitor)", color=(100, 100, 255))
             with dpg.group(horizontal=True):
                 dpg.add_combo(get_ports(), tag="uut_port", width=150, default_value="Select Port")
-                # CHANGED: Added tag and swapped callback
                 dpg.add_button(label="Connect UUT", tag="btn_connect_uut", callback=toggle_uut_connection)
             dpg.add_text("Disconnected", tag="uut_status", color=(200, 50, 50))
 
