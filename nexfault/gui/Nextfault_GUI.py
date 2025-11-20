@@ -30,7 +30,7 @@ def reader_loop_dsi(simulated=False):
     while running_dsi:
         if simulated:
             time.sleep(1)
-            msg = f"[DSI Sim] Heartbeat {time.strftime('%H:%M:%S')}"
+            msg = f"[DSI Sim] Heartbeat {time.strftime('%H:%M:%S')}\n\n"
             dpg.add_text(msg, parent="log_window_dsi")
             dpg.set_y_scroll("log_window_dsi", -1)
         else: 
@@ -192,7 +192,15 @@ def start_capture_uut_callback():
 # -----------------
 def connect_dsi_callback():
     global ser_dsi, running_dsi
+    
+    # 1. FORCE CLOSE EXISTING CONNECTION
     running_dsi = False
+    if ser_dsi and ser_dsi.is_open:
+        try:
+            ser_dsi.close()
+        except:
+            pass
+    
     port = dpg.get_value("dsi_port")
     baud = int(dpg.get_value("dsi_baud"))
     dpg.delete_item("log_window_dsi", children_only=True)
@@ -205,6 +213,7 @@ def connect_dsi_callback():
         return
 
     try:
+        # 2. NOW OPEN NEW CONNECTION
         ser_dsi = serial.Serial(port, baud, timeout=1)
         dpg.set_value("dsi_status", "Connected")
         dpg.configure_item("dsi_status", color=(0, 200, 0))
@@ -213,11 +222,19 @@ def connect_dsi_callback():
     except Exception as e:
         dpg.set_value("dsi_status", "Error")
         dpg.configure_item("dsi_status", color=(200, 0, 0))
-        dpg.add_text(f"[Error] {e}", parent="log_window_dsi")
+        dpg.add_text(f"[Error] {e}\n\n", parent="log_window_dsi")
 
 def connect_uut_callback():
     global ser_uut, running_uut
+    
+    # 1. FORCE CLOSE EXISTING CONNECTION
     running_uut = False 
+    if ser_uut and ser_uut.is_open:
+        try:
+            ser_uut.close()
+        except:
+            pass
+
     port = dpg.get_value("uut_port")
     baud = 115200
     dpg.delete_item("log_window_uut", children_only=True)
@@ -230,6 +247,7 @@ def connect_uut_callback():
         return
 
     try:
+        # 2. NOW OPEN NEW CONNECTION
         ser_uut = serial.Serial(port, baud, timeout=1)
         dpg.set_value("uut_status", "Connected")
         dpg.configure_item("uut_status", color=(0, 200, 0))
@@ -238,8 +256,8 @@ def connect_uut_callback():
     except Exception as e:
         dpg.set_value("uut_status", "Error")
         dpg.configure_item("uut_status", color=(200, 0, 0))
-        dpg.add_text(f"[Error] {e}", parent="log_window_uut")
-
+        dpg.add_text(f"[Error] {e}\n", parent="log_window_uut")
+        
 # -----------------
 # Command & Injection Logic
 # -----------------
@@ -353,7 +371,7 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
                 dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="9600")
                 dpg.add_button(label="Connect DSI", callback=connect_dsi_callback)
             dpg.add_text("Disconnected", tag="dsi_status", color=(200, 50, 50))
-        dpg.add_spacer(width=50)
+        dpg.add_spacer(width=515)
         with dpg.group():
             dpg.add_text("UUT Connection (Monitor)", color=(100, 100, 255))
             with dpg.group(horizontal=True):
@@ -408,7 +426,7 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
                 dpg.add_input_int(tag="duration_dsi", width=80, default_value=5, min_value=1)
                 dpg.add_button(label="Capture DSI", callback=start_capture_dsi_callback)
 
-        dpg.add_spacer(width=50)
+        dpg.add_spacer(width=485)
 
         # UUT Capture Group
         with dpg.group():
@@ -425,11 +443,13 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
 
     # --- SPLIT LOG MONITORS ---
     with dpg.group(horizontal=True):
-        with dpg.child_window(width=520, height=-1, border=True):
+        # Left: DSI Log (width=520)
+        with dpg.child_window(width=900, height=-1, border=True):
             dpg.add_text("--- DSI Serial Log ---", color=(100, 255, 100))
             dpg.add_child_window(tag="log_window_dsi", autosize_x=True, autosize_y=True)
 
-        with dpg.child_window(width=-1, height=-1, border=True):
+        # Right: UUT Log (width=520, matching DSI)
+        with dpg.child_window(width=985, height=-1, border=True):
             dpg.add_text("--- UUT Serial Log ---", color=(100, 100, 255))
             dpg.add_child_window(tag="log_window_uut", autosize_x=True, autosize_y=True)
 
