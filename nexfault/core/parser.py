@@ -143,7 +143,7 @@ class SerialDevice:
 
 # ------------------------------------------- INJECTIONS ----------------------------------------------
 
-    def byte_drop(self, seq_id = 1, start_offset = 0, length = 1, duration = 0):
+    def byte_drop(self, seq_id = 1, start_offset = 0, length = 1, payload = "default", duration = 0):
         """
         Helper for byte drop injection
         """
@@ -155,6 +155,7 @@ class SerialDevice:
         message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
         message.byte_drop.start_offset = start_offset
         message.byte_drop.length = length
+        message.byte_drop.payload = payload
 
         data = message.SerializeToString()
 
