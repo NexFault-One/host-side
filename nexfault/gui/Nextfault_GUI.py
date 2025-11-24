@@ -326,6 +326,7 @@ def send_command_callback():
                 message.byte_drop.length = length
                 
                 pattern_str = _ui_get("inject_drop_pattern", "")
+                message.byte_drop.payload = pattern_str
                 dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n", parent="log_window_dsi")
 
             elif inj_type == "Bit Flip":
