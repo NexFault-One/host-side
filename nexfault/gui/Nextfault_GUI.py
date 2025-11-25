@@ -326,8 +326,10 @@ def send_command_callback():
                 message.byte_drop.length = length
                 
                 pattern_str = _ui_get("inject_drop_pattern", "")
-                dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n", parent="log_window_dsi")
+                if pattern_str:
+                    message.byte_drop.pattern = pattern_str
 
+                dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n", parent="log_window_dsi")
             elif inj_type == "Bit Flip":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BIT_FLIP
                 message.bit_flip.start_offset = start_offset
