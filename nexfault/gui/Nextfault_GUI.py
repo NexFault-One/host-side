@@ -326,7 +326,6 @@ def send_command_callback():
                 message.byte_drop.length = length
                 
                 pattern_str = _ui_get("inject_drop_pattern", "")
-                message.byte_drop.payload = pattern_str
                 dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n", parent="log_window_dsi")
 
             elif inj_type == "Bit Flip":
@@ -379,19 +378,12 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
     # --- TOP ROW: CONNECTIONS ---
     with dpg.group(horizontal=True):
         with dpg.group():
-            dpg.add_text("DSI Connection (Control)", color=(100, 255, 100))
-            with dpg.group(horizontal=True):
-                dpg.add_combo(get_ports(), tag="dsi_port", width=150, default_value="Select Port")
-                dpg.add_text("Baud:")
-                dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="9600")
-                dpg.add_button(label="Connect DSI", tag="btn_connect_dsi", callback=toggle_dsi_connection)
-            dpg.add_text("Disconnected", tag="dsi_status", color=(200, 50, 50))
-        dpg.add_spacer(width=50)
-        with dpg.group():
-            dpg.add_text("UUT Connection (Monitor)", color=(100, 100, 255))
+            dpg.add_text("UUT Connection (Control)", color=(100, 255, 100))
             with dpg.group(horizontal=True):
                 dpg.add_combo(get_ports(), tag="uut_port", width=150, default_value="Select Port")
-                dpg.add_button(label="Connect UUT", tag="btn_connect_uut", callback=toggle_uut_connection)
+                dpg.add_text("Baud:")
+                dpg.add_combo(("9600", "57600", "115200"), tag="uut_baud", width=80, default_value="9600")
+                dpg.add_button(label="Connect UUT", tag="btn_connect_uut", callback=toggle_dsi_connection)
             dpg.add_text("Disconnected", tag="uut_status", color=(200, 50, 50))
 
     dpg.add_separator()
@@ -433,39 +425,19 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
     with dpg.group(horizontal=True):
         # DSI Capture Group
         with dpg.group():
-            dpg.add_text("Data Capture (DSI)", color=(100, 255, 100))
-            with dpg.group(horizontal=True):
-                dpg.add_text("Name:")
-                dpg.add_input_text(tag="run_name_dsi", width=120, default_value="dsi_log", hint="Filename")
-                dpg.add_text("Time(s):")
-                dpg.add_input_int(tag="duration_dsi", width=80, default_value=5, min_value=1)
-                dpg.add_button(label="Capture DSI", callback=start_capture_dsi_callback)
-
-        dpg.add_spacer(width=50)
-
-        # UUT Capture Group
-        with dpg.group():
-            dpg.add_text("Data Capture (UUT)", color=(100, 100, 255))
+            dpg.add_text("Data Capture (UUT)", color=(100, 255, 100))
             with dpg.group(horizontal=True):
                 dpg.add_text("Name:")
                 dpg.add_input_text(tag="run_name_uut", width=120, default_value="uut_log", hint="Filename")
                 dpg.add_text("Time(s):")
                 dpg.add_input_int(tag="duration_uut", width=80, default_value=5, min_value=1)
-                dpg.add_button(label="Capture UUT", callback=start_capture_uut_callback)
-
-    dpg.add_separator()
-    dpg.add_spacer(height=5)
+                dpg.add_button(label="Capture UUT", callback=start_capture_dsi_callback)
 
     # --- SPLIT LOG MONITORS ---
     with dpg.group(horizontal=True):
-        # Left: DSI Log (width=520)
+        # Left: UUT Log (width=520)
         with dpg.child_window(width=520, height=-1, border=True):
-            dpg.add_text("--- DSI Serial Log ---", color=(100, 255, 100))
-            dpg.add_child_window(tag="log_window_dsi", autosize_x=True, autosize_y=True)
-
-        # Right: UUT Log (width=520, matching DSI)
-        with dpg.child_window(width=520, height=-1, border=True):
-            dpg.add_text("--- UUT Serial Log ---", color=(100, 100, 255))
+            dpg.add_text("--- UUT Serial Log ---", color=(100, 255, 100))
             dpg.add_child_window(tag="log_window_uut", autosize_x=True, autosize_y=True)
 
 dpg.setup_dearpygui()
