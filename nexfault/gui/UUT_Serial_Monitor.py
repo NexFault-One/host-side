@@ -324,30 +324,57 @@ def send_command_callback():
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
                 message.byte_drop.start_offset = start_offset
                 message.byte_drop.length = length
-                
-                pattern_str = _ui_get("inject_drop_pattern", "")
-                dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n", parent="log_window_dsi")
 
+                # read the pattern string from the GUI
+                pattern_str = _ui_get("inject_drop_pattern", "")
+            
+                # make sure it's not empty
+                if not pattern_str:
+                    dpg.add_text("[Error] Byte Drop Pattern cannot be empty\n\n", parent="log_window_dsi")
+                    return
+            
+                # assign it to the protobuf message
+                message.byte_drop.payload = pattern_str
+            
+                dpg.add_text(
+                    f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n",
+                    parent="log_window_dsi"
+                )
+
+            # to rework - nizar
             elif inj_type == "Bit Flip":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BIT_FLIP
-                message.bit_flip.start_offset = start_offset
-                message.bit_flip.length = length
-                
-                mask_str = _ui_get("inject_xor_mask", "FF")
-                try:
-                    clean_mask = mask_str.replace(" ", "").replace("0x", "")
-                    message.bit_flip.xor_mask = bytes.fromhex(clean_mask)
-                except ValueError:
-                    dpg.add_text("[Error] Invalid XOR Mask Hex String\n\n", parent="log_window_dsi")
-                    return
+                # offset = every_n for periodic
+                # length = number of bits to drop
+                message.bit_flip.every_n_p = start_offset
+                message.bit_flip.bits_drop = length
+                mode = dpg.get_value("bitflip_mode_dropdown")
+                if mode == "RANDOM":
+                    message.bit_flip.mode = uart_data_pb2.BitFlipMode.RANDOM
+                else:
+                    message.bit_flip.mode = uart_data_pb2.BitFlipMode.PERIODIC
 
-                dpg.add_text(f"[TX] Inject BitFlip (off={start_offset}, len={length}, mask={clean_mask})\n\n", parent="log_window_dsi")
+                pattern_str = dpg.get_value("inject_xor_mask")
+            
+                # make sure it's not empty
+                if not pattern_str:
+                    dpg.add_text("[Error] Bit Flip Pattern cannot be empty\n\n", parent="log_window_dsi")
+                    return
+            
+                # assign it to the protobuf message
+                message.bit_flip.payload = pattern_str
+            
+                dpg.add_text(
+                    f"[TX] Inject BitFlip (every_n={start_offset}, random_n_bits={length}, mode={mode}, pattern='{pattern_str}')\n\n",
+                    parent="log_window_dsi"
+                )
 
         payload = message.SerializeToString()
         frame = struct.pack("<H", len(payload)) + payload
-
+        print(f"[DEBUG] TX len={len(payload)} frame hex={frame.hex(' ')}")
         if ser_dsi and ser_dsi.is_open:
             ser_dsi.write(frame)
+            time.sleep(0.05)
             ser_dsi.flush()
         else:
             dpg.add_text(f"[Sim TX] {frame.hex(' ')}\n\n", parent="log_window_dsi")
@@ -380,14 +407,12 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
         with dpg.group():
             dpg.add_text("UUT Connection (Control)", color=(100, 255, 100))
             with dpg.group(horizontal=True):
-                dpg.add_combo(get_ports(), tag="uut_port", width=150, default_value="Select Port")
+                dpg.add_combo(get_ports(), tag="dsi_port", width=150, default_value="Select Port")
                 dpg.add_text("Baud:")
-                dpg.add_combo(("9600", "57600", "115200"), tag="uut_baud", width=80, default_value="9600")
+                dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="9600")
                 dpg.add_button(label="Connect UUT", tag="btn_connect_uut", callback=toggle_dsi_connection)
-            dpg.add_text("Disconnected", tag="uut_status", color=(200, 50, 50))
+            dpg.add_text("Disconnected", tag="dsi_status", color=(200, 50, 50))
 
-    dpg.add_separator()
-    dpg.add_spacer(height=5)
 
     # --- COMMAND & INJECTION ---
     dpg.add_text("Injection Control", color=(255, 200, 80))
@@ -413,10 +438,12 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
             with dpg.group(tag="byte_drop_group", show=True, horizontal=True):
                 dpg.add_text("Pattern (String):", color=(255, 200, 100))
                 dpg.add_input_text(tag="inject_drop_pattern", width=120, default_value="", hint="Target String")
-
+            # to rework - nizar
             with dpg.group(tag="xor_mask_group", show=False, horizontal=True):
-                dpg.add_text("XOR Mask (Hex):", color=(255, 100, 100))
-                dpg.add_input_text(tag="inject_xor_mask", width=100, default_value="FF", hint="e.g. FF AA")
+                dpg.add_text("Pattern:", color=(255, 100, 100))
+                dpg.add_input_text(tag="inject_xor_mask", width=100, default_value="", hint="String")
+                dpg.add_spacer(width=10)
+                dpg.add_combo(items=["RANDOM", "PERIODIC"], default_value="RANDOM", tag="bitflip_mode_dropdown", width=100)
 
     dpg.add_separator()
     dpg.add_spacer(height=5)
@@ -431,11 +458,14 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
                 dpg.add_input_text(tag="run_name_uut", width=120, default_value="uut_log", hint="Filename")
                 dpg.add_text("Time(s):")
                 dpg.add_input_int(tag="duration_uut", width=80, default_value=5, min_value=1)
-                dpg.add_button(label="Capture UUT", callback=start_capture_dsi_callback)
+                dpg.add_button(label="Capture UUt", callback=start_capture_dsi_callback)
+
+        dpg.add_spacer(width=50)
+
 
     # --- SPLIT LOG MONITORS ---
     with dpg.group(horizontal=True):
-        # Left: UUT Log (width=520)
+        # Left: DSI Log (width=520)
         with dpg.child_window(width=520, height=-1, border=True):
             dpg.add_text("--- UUT Serial Log ---", color=(100, 255, 100))
             dpg.add_child_window(tag="log_window_uut", autosize_x=True, autosize_y=True)
@@ -444,3 +474,4 @@ dpg.setup_dearpygui()
 dpg.show_viewport()
 dpg.start_dearpygui()
 dpg.destroy_context()
+
