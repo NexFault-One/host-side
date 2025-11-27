@@ -370,7 +370,7 @@ with dpg.window(label="DSI Monitor", width=1900, height=980, pos=(0, 0)):
     dpg.add_spacer(height=5)
 
     # --- LOG MONITOR ---
-    dpg.add_text("Serial Output:", color=(200, 200, 200))
+    dpg.add_text("--- DSI Serial Log ---", color=(100, 100, 255))
     dpg.add_child_window(tag="log_window_dsi", width=-1, height=-1, border=True)
 
 dpg.setup_dearpygui()
