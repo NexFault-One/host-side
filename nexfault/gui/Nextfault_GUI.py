@@ -324,9 +324,22 @@ def send_command_callback():
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
                 message.byte_drop.start_offset = start_offset
                 message.byte_drop.length = length
-                
+
+                # read the pattern string from the GUI
                 pattern_str = _ui_get("inject_drop_pattern", "")
-                dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n", parent="log_window_dsi")
+            
+                # make sure it's not empty
+                if not pattern_str:
+                    dpg.add_text("[Error] Byte Drop Pattern cannot be empty\n\n", parent="log_window_dsi")
+                    return
+            
+                # assign it to the protobuf message
+                message.byte_drop.payload = pattern_str
+            
+                dpg.add_text(
+                    f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n",
+                    parent="log_window_dsi"
+                )
 
             elif inj_type == "Bit Flip":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BIT_FLIP
@@ -345,9 +358,10 @@ def send_command_callback():
 
         payload = message.SerializeToString()
         frame = struct.pack("<H", len(payload)) + payload
-
+        print(f"[DEBUG] TX len={len(payload)} frame hex={frame.hex(' ')}")
         if ser_dsi and ser_dsi.is_open:
             ser_dsi.write(frame)
+            time.sleep(0.05)
             ser_dsi.flush()
         else:
             dpg.add_text(f"[Sim TX] {frame.hex(' ')}\n\n", parent="log_window_dsi")

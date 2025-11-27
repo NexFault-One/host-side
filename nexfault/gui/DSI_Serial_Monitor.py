@@ -237,24 +237,50 @@ def send_command_callback():
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
                 message.byte_drop.start_offset = start_offset
                 message.byte_drop.length = length
-                
-                pattern_str = dpg.get_value("inject_drop_pattern")
-                dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n", parent="log_window_dsi")
 
+                # read the pattern string from the GUI
+                pattern_str = dpg.get_value("inject_drop_pattern")
+            
+                # make sure it's not empty
+                if not pattern_str:
+                    dpg.add_text("[Error] Byte Drop Pattern cannot be empty\n\n", parent="log_window_dsi")
+                    return
+            
+                # assign it to the protobuf message
+                message.byte_drop.payload = pattern_str
+            
+                dpg.add_text(
+                    f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n",
+                    parent="log_window_dsi"
+                )
+            
+            # rework -- nizar
             elif inj_type == "Bit Flip":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BIT_FLIP
-                message.bit_flip.start_offset = start_offset
-                message.bit_flip.length = length
-                
-                mask_str = dpg.get_value("inject_xor_mask")
-                try:
-                    clean_mask = mask_str.replace(" ", "").replace("0x", "")
-                    message.bit_flip.xor_mask = bytes.fromhex(clean_mask)
-                except ValueError:
-                    dpg.add_text("[Error] Invalid XOR Mask Hex String\n\n", parent="log_window_dsi")
-                    return
+                # offset = every_n for periodic
+                # length = number of bits to drop
+                message.bit_flip.every_n_p = start_offset
+                message.bit_flip.bits_drop = length
+                mode = dpg.get_value("bitflip_mode_dropdown")
+                if mode == "RANDOM":
+                    message.bit_flip.mode = uart_data_pb2.BitFlipMode.RANDOM
+                else:
+                    message.bit_flip.mode = uart_data_pb2.BitFlipMode.PERIODIC
 
-                dpg.add_text(f"[TX] Inject BitFlip (off={start_offset}, len={length}, mask={clean_mask})\n\n", parent="log_window_dsi")
+                pattern_str = dpg.get_value("inject_xor_mask")
+            
+                # make sure it's not empty
+                if not pattern_str:
+                    dpg.add_text("[Error] Bit Flip Pattern cannot be empty\n\n", parent="log_window_dsi")
+                    return
+            
+                # assign it to the protobuf message
+                message.bit_flip.payload = pattern_str
+            
+                dpg.add_text(
+                    f"[TX] Inject BitFlip (every_n={start_offset}, random_n_bits={length}, mode={mode}, pattern='{pattern_str}')\n\n",
+                    parent="log_window_dsi"
+                )
 
         payload = message.SerializeToString()
         frame = struct.pack("<H", len(payload)) + payload
@@ -321,10 +347,12 @@ with dpg.window(label="DSI Monitor", width=1900, height=980, pos=(0, 0)):
             with dpg.group(tag="byte_drop_group", show=True, horizontal=True):
                 dpg.add_text("Pattern:", color=(255, 200, 100))
                 dpg.add_input_text(tag="inject_drop_pattern", width=100, default_value="", hint="String")
-
+            # rework -- nizar
             with dpg.group(tag="xor_mask_group", show=False, horizontal=True):
-                dpg.add_text("Mask(Hex):", color=(255, 100, 100))
-                dpg.add_input_text(tag="inject_xor_mask", width=100, default_value="FF", hint="e.g. FF")
+                dpg.add_text("Pattern:", color=(255, 100, 100))
+                dpg.add_input_text(tag="inject_xor_mask", width=100, default_value="", hint="String")
+                dpg.add_spacer(width=10)
+                dpg.add_combo(items=["RANDOM", "PERIODIC"], default_value="RANDOM", tag="bitflip_mode_dropdown", width=100)
 
     dpg.add_separator()
     dpg.add_spacer(height=5)
