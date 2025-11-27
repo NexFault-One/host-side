@@ -300,7 +300,7 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
         with dpg.group(horizontal=True):
             dpg.add_combo(get_ports(), tag="main_port", width=150, default_value="Select Port")
             dpg.add_text("Baud:")
-            dpg.add_combo(("9600", "57600", "115200"), tag="main_baud", width=80, default_value="115200")
+            dpg.add_combo(("9600", "57600", "115200"), tag="main_baud", width=80, default_value="9600")
             dpg.add_button(label="Connect Device", tag="btn_connect", callback=toggle_connection)
         dpg.add_text("Disconnected", tag="conn_status", color=(200, 50, 50))
 
@@ -357,9 +357,8 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
     with dpg.group(horizontal=True):
         # We push it to the right by using a spacer or just letting it fill
         # If you want it specifically "on the right" visually but taking up space:
-        dpg.add_spacer(width=20) 
         
-        with dpg.child_window(width=-1, height=-1, border=True):
+        with dpg.child_window(width=520, height=-1, border=True):
             dpg.add_text("--- UUT Serial Log ---", color=(100, 255, 100))
             dpg.add_child_window(tag="log_window_uut", autosize_x=True, autosize_y=True)
 
