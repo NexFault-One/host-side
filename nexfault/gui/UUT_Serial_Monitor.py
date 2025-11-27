@@ -8,38 +8,40 @@ from datetime import datetime
 
 # Correct import based on your submodule structure
 from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
-
 from nexfault.core.parser import SerialDevice
 from nexfault.core.logger import LogFile
 
 # -----------------
 # Global State
 # -----------------
-ser_dsi = None
-ser_uut = None
-running_dsi = False
-running_uut = False
+ser_main = None   # Single serial object for both DSI and UUT functions
+running = False
 
 # -----------------
-# Serial Reader Loops
+# Serial Reader Loop (Combined)
 # ----------------- 
-def reader_loop_dsi(simulated=False):
-    """Background loop for DSI (Control Device)"""
-    global ser_dsi, running_dsi
+def reader_loop_main(simulated=False):
+    """Background loop: Handles UUT monitoring AND DSI progress updates"""
+    global ser_main, running
     
-    while running_dsi:
+    log_tag = "log_window_uut" # Using the UUT window for everything
+
+    while running:
         if simulated:
             time.sleep(1)
-            msg = f"[DSI Sim] Heartbeat {time.strftime('%H:%M:%S')}\n\n"
-            dpg.add_text(msg, parent="log_window_dsi")
-            dpg.set_y_scroll("log_window_dsi", -1)
+            msg = f"[Sim] Heartbeat {time.strftime('%H:%M:%S')}\n\n"
+            dpg.add_text(msg, parent=log_tag)
+            dpg.set_y_scroll(log_tag, -1)
         else: 
             try:
-                if ser_dsi and ser_dsi.in_waiting:
-                    line = ser_dsi.readline().decode(errors="ignore").strip()
+                if ser_main and ser_main.in_waiting:
+                    line = ser_main.readline().decode(errors="ignore").strip()
                     if line:
-                        dpg.add_text(f"[RX] {line}\n\n", parent="log_window_dsi")
-                        dpg.set_y_scroll("log_window_dsi", -1)
+                        # 1. Log the line (UUT Function)
+                        dpg.add_text(f"[RX] {line}\n\n", parent=log_tag)
+                        dpg.set_y_scroll(log_tag, -1)
+
+                        # 2. Check for DSI Progress Logic (DSI Function)
                         if line.startswith("PROG:"):
                             try:
                                 value = float(line.split(":")[1])
@@ -47,30 +49,7 @@ def reader_loop_dsi(simulated=False):
                             except ValueError:
                                 pass
             except Exception as e:
-                dpg.add_text(f"[DSI Error] {e}\n\n", parent="log_window_dsi")
-                break
-        time.sleep(0.05)
-
-def reader_loop_uut(simulated=False):
-    """Background loop for UUT (Unit Under Test) - Monitor Only"""
-    global ser_uut, running_uut
-    
-    while running_uut:
-        if simulated:
-            time.sleep(1.5)
-            msg = f"[UUT Sim] Output {time.strftime('%H:%M:%S')}\n\n"
-            dpg.add_text(msg, parent="log_window_uut")
-            dpg.set_y_scroll("log_window_uut", -1)
-        else:
-            try:
-                if ser_uut and ser_uut.in_waiting:
-                    line = ser_uut.readline().decode(errors="ignore").strip()
-                    if line:
-                        # --- UPDATED: Added [RX] prefix and \n\n spacing to match DSI ---
-                        dpg.add_text(f"[RX] {line}\n\n", parent="log_window_uut")
-                        dpg.set_y_scroll("log_window_uut", -1)
-            except Exception as e:
-                dpg.add_text(f"[UUT Error] {e}\n\n", parent="log_window_uut")
+                dpg.add_text(f"[Error] {e}\n\n", parent=log_tag)
                 break
         time.sleep(0.05)
 
@@ -78,68 +57,53 @@ def reader_loop_uut(simulated=False):
 # Capture & Save Backend
 # -----------------
 def _make_row(chunk: bytes, ts: str):
-    """Helper to format log rows"""
     return [ts, len(chunk), chunk.hex(" "), chunk.decode("utf-8", "ignore").strip(), chunk]
 
-def _capture_backend(duration_s: int, run_name: str, target: str):
-    """
-    Generic capture backend.
-    target: "DSI" or "UUT"
-    """
-    global ser_dsi, ser_uut, running_dsi, running_uut
+def _capture_backend(duration_s: int, run_name: str):
+    global ser_main, running
     
-    # Configuration Map
-    if target == "DSI":
-        ser_target = ser_dsi
-        port_tag = "dsi_port"
-        log_window = "log_window_dsi"
-        sim_baud = 9600
-        running_dsi = False
-    else: # UUT
-        ser_target = ser_uut
-        port_tag = "uut_port"
-        log_window = "log_window_uut"
-        sim_baud = 115200
-        running_uut = False
-
-    time.sleep(0.2) # Allow thread to exit
+    port_tag = "main_port"
+    log_window = "log_window_uut"
+    
+    # Pause the main reader loop
+    running = False
+    time.sleep(0.2) 
 
     try:
         port = dpg.get_value(port_tag)
         simulated = str(port).strip().lower().startswith("simulated")
 
-        dpg.add_text(f"[Capture] Starting {duration_s}s capture on {target}...\n\n", parent=log_window)
+        dpg.add_text(f"[Capture] Starting {duration_s}s capture...\n\n", parent=log_window)
         dpg.set_y_scroll(log_window, -1)
 
         rows = []
         
         if simulated:
-            dev = SerialDevice("FAKE", sim_baud)
+            dev = SerialDevice("FAKE", 115200)
             dev.connect()
             rows = dev.read_buffer(duration_s)
             dev.disconnect()
         else:
-            if ser_target is None or not ser_target.is_open:
-                dpg.add_text(f"[Capture] Error: {target} Port not open\n\n", parent=log_window)
+            if ser_main is None or not ser_main.is_open:
+                dpg.add_text(f"[Capture] Error: Port not open\n\n", parent=log_window)
                 return
 
             end = time.time() + duration_s
-            old_timeout = ser_target.timeout
-            ser_target.timeout = 0.1
+            old_timeout = ser_main.timeout
+            ser_main.timeout = 0.1
             
             try:
                 while time.time() < end:
-                    if ser_target.in_waiting:
-                        chunk = ser_target.read(ser_target.in_waiting or 1)
+                    if ser_main.in_waiting:
+                        chunk = ser_main.read(ser_main.in_waiting or 1)
                         if chunk:
                             ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
                             rows.append(_make_row(chunk, ts))
             finally:
-                ser_target.timeout = old_timeout
+                ser_main.timeout = old_timeout
 
         if rows:
-            full_name = f"{run_name}_{target}"
-            lf = LogFile((full_name).strip())
+            lf = LogFile((run_name).strip())
             headers = ["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)"]
             
             csv_path = lf.log_csv(headers, rows)
@@ -148,132 +112,73 @@ def _capture_backend(duration_s: int, run_name: str, target: str):
             dpg.add_text(f"[Capture] Saved CSV: {csv_path}\n", parent=log_window)
             dpg.add_text(f"[Capture] Saved JSON: {json_path}\n\n", parent=log_window)
         else:
-            dpg.add_text(f"[Capture] No data received from {target}.\n\n", parent=log_window)
+            dpg.add_text(f"[Capture] No data received.\n\n", parent=log_window)
 
     except Exception as e:
         dpg.add_text(f"[Capture Error] {e}\n\n", parent=log_window)
     
     finally:
+        # Restart the main reader loop
         sim_again = str(dpg.get_value(port_tag)).strip().lower().startswith("simulated")
-        
-        if target == "DSI":
-            if (ser_dsi and ser_dsi.is_open) or sim_again:
-                running_dsi = True
-                threading.Thread(target=reader_loop_dsi, args=(sim_again,), daemon=True).start()
-            dpg.set_y_scroll("log_window_dsi", -1)
-        else:
-            if (ser_uut and ser_uut.is_open) or sim_again:
-                running_uut = True
-                threading.Thread(target=reader_loop_uut, args=(sim_again,), daemon=True).start()
-            dpg.set_y_scroll("log_window_uut", -1)
+        if (ser_main and ser_main.is_open) or sim_again:
+            running = True
+            threading.Thread(target=reader_loop_main, args=(sim_again,), daemon=True).start()
 
-def start_capture_dsi_callback():
-    run_name = _ui_get("run_name_dsi", "dsi_run")
-    dur_val = _ui_get("duration_dsi", 5)
-    threading.Thread(target=_capture_backend, args=(dur_val, run_name, "DSI"), daemon=True).start()
-
-def start_capture_uut_callback():
-    run_name = _ui_get("run_name_uut", "uut_run")
-    dur_val = _ui_get("duration_uut", 5)
-    threading.Thread(target=_capture_backend, args=(dur_val, run_name, "UUT"), daemon=True).start()
+def start_capture_callback():
+    run_name = _ui_get("run_name", "device_log")
+    dur_val = _ui_get("duration", 5)
+    threading.Thread(target=_capture_backend, args=(dur_val, run_name), daemon=True).start()
 
 # -----------------
-# Toggle Connection Callbacks
+# Connection Callback (Unified)
 # -----------------
-def toggle_dsi_connection():
-    global ser_dsi, running_dsi
-    current_label = dpg.get_item_label("btn_connect_dsi")
+def toggle_connection():
+    global ser_main, running
+    current_label = dpg.get_item_label("btn_connect")
     
-    if current_label == "Connect DSI":
-        port = dpg.get_value("dsi_port")
-        baud = int(dpg.get_value("dsi_baud"))
-        dpg.delete_item("log_window_dsi", children_only=True)
-
-        if port == "Simulated Device":
-            dpg.set_value("dsi_status", "Connected (Sim)")
-            dpg.configure_item("dsi_status", color=(0, 200, 0))
-            dpg.configure_item("btn_connect_dsi", label="Disconnect DSI")
-            running_dsi = True
-            threading.Thread(target=reader_loop_dsi, args=(True,), daemon=True).start()
-            return
-
-        try:
-            ser_dsi = serial.Serial(port, baud, timeout=1)
-            ser_dsi.dtr = False 
-            ser_dsi.rts = False
-            dpg.set_value("dsi_status", "Connected")
-            dpg.configure_item("dsi_status", color=(0, 200, 0))
-            dpg.configure_item("btn_connect_dsi", label="Disconnect DSI")
-            running_dsi = True
-            threading.Thread(target=reader_loop_dsi, daemon=True).start()
-        except Exception as e:
-            dpg.set_value("dsi_status", "Error")
-            dpg.configure_item("dsi_status", color=(200, 0, 0))
-            dpg.add_text(f"[Error] {e}\n\n", parent="log_window_dsi")
-
-    else:
-        running_dsi = False
-        time.sleep(0.1)
-        try:
-            if ser_dsi and ser_dsi.is_open:
-                ser_dsi.close()
-        except:
-            pass
-        ser_dsi = None
-        dpg.set_value("dsi_status", "Disconnected")
-        dpg.configure_item("dsi_status", color=(200, 50, 50))
-        dpg.configure_item("btn_connect_dsi", label="Connect DSI")
-        dpg.add_text("[Info] Disconnected\n\n", parent="log_window_dsi")
-
-
-def toggle_uut_connection():
-    global ser_uut, running_uut
-    current_label = dpg.get_item_label("btn_connect_uut")
-    
-    if current_label == "Connect UUT":
-        port = dpg.get_value("uut_port")
-        baud = 115200
+    if current_label == "Connect Device":
+        port = dpg.get_value("main_port")
+        baud = int(dpg.get_value("main_baud"))
         dpg.delete_item("log_window_uut", children_only=True)
 
         if port == "Simulated Device":
-            dpg.set_value("uut_status", "Connected (Sim)")
-            dpg.configure_item("uut_status", color=(0, 200, 0))
-            dpg.configure_item("btn_connect_uut", label="Disconnect UUT")
-            running_uut = True
-            threading.Thread(target=reader_loop_uut, args=(True,), daemon=True).start()
+            dpg.set_value("conn_status", "Connected (Sim)")
+            dpg.configure_item("conn_status", color=(0, 200, 0))
+            dpg.configure_item("btn_connect", label="Disconnect")
+            running = True
+            threading.Thread(target=reader_loop_main, args=(True,), daemon=True).start()
             return
 
         try:
-            ser_uut = serial.Serial(port, baud, timeout=1)
-            ser_uut.dtr = False
-            ser_uut.rts = False
-            dpg.set_value("uut_status", "Connected")
-            dpg.configure_item("uut_status", color=(0, 200, 0))
-            dpg.configure_item("btn_connect_uut", label="Disconnect UUT")
-            running_uut = True
-            threading.Thread(target=reader_loop_uut, daemon=True).start()
+            ser_main = serial.Serial(port, baud, timeout=1)
+            ser_main.dtr = False 
+            ser_main.rts = False
+            dpg.set_value("conn_status", "Connected")
+            dpg.configure_item("conn_status", color=(0, 200, 0))
+            dpg.configure_item("btn_connect", label="Disconnect")
+            running = True
+            threading.Thread(target=reader_loop_main, daemon=True).start()
         except Exception as e:
-            dpg.set_value("uut_status", "Error")
-            dpg.configure_item("uut_status", color=(200, 0, 0))
+            dpg.set_value("conn_status", "Error")
+            dpg.configure_item("conn_status", color=(200, 0, 0))
             dpg.add_text(f"[Error] {e}\n\n", parent="log_window_uut")
 
     else:
-        running_uut = False
+        running = False
         time.sleep(0.1)
         try:
-            if ser_uut and ser_uut.is_open:
-                ser_uut.close()
+            if ser_main and ser_main.is_open:
+                ser_main.close()
         except:
             pass
-        ser_uut = None
-        dpg.set_value("uut_status", "Disconnected")
-        dpg.configure_item("uut_status", color=(200, 50, 50))
-        dpg.configure_item("btn_connect_uut", label="Connect UUT")
+        ser_main = None
+        dpg.set_value("conn_status", "Disconnected")
+        dpg.configure_item("conn_status", color=(200, 50, 50))
+        dpg.configure_item("btn_connect", label="Connect Device")
         dpg.add_text("[Info] Disconnected\n\n", parent="log_window_uut")
 
-
 # -----------------
-# Command & Injection Logic
+# Command & Injection Logic (Sends to ser_main)
 # -----------------
 def toggle_injection_fields(sender, app_data):
     if app_data == "Inject":
@@ -290,9 +195,13 @@ def update_dynamic_fields(sender, app_data):
         dpg.configure_item("xor_mask_group", show=True)
 
 def send_command_callback():
-    global ser_dsi
-    if ser_dsi is None and not running_dsi:
-        dpg.add_text("[Command] Error: DSI Not connected\n\n", parent="log_window_dsi")
+    global ser_main
+    
+    # Log to UUT window
+    log_tag = "log_window_uut"
+
+    if ser_main is None and not running:
+        dpg.add_text("[Command] Error: Device Not connected\n\n", parent=log_tag)
         return
 
     try:
@@ -305,11 +214,11 @@ def send_command_callback():
 
         if main_command == "Ping":
             message.cmd = uart_data_pb2.CommandType.CMD_PING
-            dpg.add_text(f"[TX] Ping (id={seq_id})\n\n", parent="log_window_dsi")
+            dpg.add_text(f"[TX] Ping (id={seq_id})\n\n", parent=log_tag)
         
         elif main_command == "Abort":
             message.cmd = uart_data_pb2.CommandType.CMD_ABORT
-            dpg.add_text(f"[TX] Abort (id={seq_id})\n\n", parent="log_window_dsi")
+            dpg.add_text(f"[TX] Abort (id={seq_id})\n\n", parent=log_tag)
             
         elif main_command == "Inject":
             message.cmd = uart_data_pb2.CommandType.CMD_INJECT
@@ -324,64 +233,47 @@ def send_command_callback():
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
                 message.byte_drop.start_offset = start_offset
                 message.byte_drop.length = length
-
-                # read the pattern string from the GUI
                 pattern_str = _ui_get("inject_drop_pattern", "")
             
-                # make sure it's not empty
                 if not pattern_str:
-                    dpg.add_text("[Error] Byte Drop Pattern cannot be empty\n\n", parent="log_window_dsi")
+                    dpg.add_text("[Error] Pattern cannot be empty\n\n", parent=log_tag)
                     return
             
-                # assign it to the protobuf message
                 message.byte_drop.payload = pattern_str
-            
-                dpg.add_text(
-                    f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n",
-                    parent="log_window_dsi"
-                )
+                dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length}, pattern='{pattern_str}')\n\n", parent=log_tag)
 
-            # to rework - nizar
             elif inj_type == "Bit Flip":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BIT_FLIP
-                # offset = every_n for periodic
-                # length = number of bits to drop
                 message.bit_flip.every_n_p = start_offset
                 message.bit_flip.bits_drop = length
                 mode = dpg.get_value("bitflip_mode_dropdown")
+                
                 if mode == "RANDOM":
                     message.bit_flip.mode = uart_data_pb2.BitFlipMode.RANDOM
                 else:
                     message.bit_flip.mode = uart_data_pb2.BitFlipMode.PERIODIC
 
                 pattern_str = dpg.get_value("inject_xor_mask")
-            
-                # make sure it's not empty
                 if not pattern_str:
-                    dpg.add_text("[Error] Bit Flip Pattern cannot be empty\n\n", parent="log_window_dsi")
+                    dpg.add_text("[Error] Bit Flip Pattern cannot be empty\n\n", parent=log_tag)
                     return
             
-                # assign it to the protobuf message
                 message.bit_flip.payload = pattern_str
-            
-                dpg.add_text(
-                    f"[TX] Inject BitFlip (every_n={start_offset}, random_n_bits={length}, mode={mode}, pattern='{pattern_str}')\n\n",
-                    parent="log_window_dsi"
-                )
+                dpg.add_text(f"[TX] Inject BitFlip (every_n={start_offset}, random_n={length}, mode={mode}, pattern='{pattern_str}')\n\n", parent=log_tag)
 
         payload = message.SerializeToString()
         frame = struct.pack("<H", len(payload)) + payload
-        print(f"[DEBUG] TX len={len(payload)} frame hex={frame.hex(' ')}")
-        if ser_dsi and ser_dsi.is_open:
-            ser_dsi.write(frame)
+        
+        if ser_main and ser_main.is_open:
+            ser_main.write(frame)
             time.sleep(0.05)
-            ser_dsi.flush()
+            ser_main.flush()
         else:
-            dpg.add_text(f"[Sim TX] {frame.hex(' ')}\n\n", parent="log_window_dsi")
-            dpg.set_y_scroll("log_window_dsi", -1)
+            dpg.add_text(f"[Sim TX] {frame.hex(' ')}\n\n", parent=log_tag)
+            dpg.set_y_scroll(log_tag, -1)
 
     except Exception as e:
-        dpg.add_text(f"[Error] {e}\n\n", parent="log_window_dsi")
+        dpg.add_text(f"[Error] {e}\n\n", parent=log_tag)
 
 # -----------------
 # Helpers
@@ -402,17 +294,18 @@ dpg.create_viewport(title="NextFault Dashboard", width=1100, height=700)
 
 with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
     
-    # --- TOP ROW: CONNECTIONS ---
+    # --- SINGLE CONNECTION ROW ---
     with dpg.group(horizontal=True):
-        with dpg.group():
-            dpg.add_text("UUT Connection (Control)", color=(100, 255, 100))
-            with dpg.group(horizontal=True):
-                dpg.add_combo(get_ports(), tag="dsi_port", width=150, default_value="Select Port")
-                dpg.add_text("Baud:")
-                dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="9600")
-                dpg.add_button(label="Connect UUT", tag="btn_connect_uut", callback=toggle_dsi_connection)
-            dpg.add_text("Disconnected", tag="dsi_status", color=(200, 50, 50))
+        dpg.add_text("Device Connection (UUT)", color=(100, 200, 255))
+        with dpg.group(horizontal=True):
+            dpg.add_combo(get_ports(), tag="main_port", width=150, default_value="Select Port")
+            dpg.add_text("Baud:")
+            dpg.add_combo(("9600", "57600", "115200"), tag="main_baud", width=80, default_value="115200")
+            dpg.add_button(label="Connect Device", tag="btn_connect", callback=toggle_connection)
+        dpg.add_text("Disconnected", tag="conn_status", color=(200, 50, 50))
 
+    dpg.add_separator()
+    dpg.add_spacer(height=5)
 
     # --- COMMAND & INJECTION ---
     dpg.add_text("Injection Control", color=(255, 200, 80))
@@ -436,9 +329,9 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
             dpg.add_input_int(tag="inject_duration", width=80, min_value=0, default_value=0)
             
             with dpg.group(tag="byte_drop_group", show=True, horizontal=True):
-                dpg.add_text("Pattern (String):", color=(255, 200, 100))
+                dpg.add_text("Pattern:", color=(255, 200, 100))
                 dpg.add_input_text(tag="inject_drop_pattern", width=120, default_value="", hint="Target String")
-            # to rework - nizar
+            
             with dpg.group(tag="xor_mask_group", show=False, horizontal=True):
                 dpg.add_text("Pattern:", color=(255, 100, 100))
                 dpg.add_input_text(tag="inject_xor_mask", width=100, default_value="", hint="String")
@@ -448,25 +341,25 @@ with dpg.window(label="Dashboard", width=1920, height=1080, pos=(0, 0)):
     dpg.add_separator()
     dpg.add_spacer(height=5)
 
-    # --- DATA CAPTURE SECTIONS ---
+    # --- DATA CAPTURE (SINGLE) ---
     with dpg.group(horizontal=True):
-        # DSI Capture Group
-        with dpg.group():
-            dpg.add_text("Data Capture (UUT)", color=(100, 255, 100))
-            with dpg.group(horizontal=True):
-                dpg.add_text("Name:")
-                dpg.add_input_text(tag="run_name_uut", width=120, default_value="uut_log", hint="Filename")
-                dpg.add_text("Time(s):")
-                dpg.add_input_int(tag="duration_uut", width=80, default_value=5, min_value=1)
-                dpg.add_button(label="Capture UUt", callback=start_capture_dsi_callback)
+        dpg.add_text("Data Capture", color=(100, 100, 255))
+        dpg.add_text("Name:")
+        dpg.add_input_text(tag="run_name", width=120, default_value="uut_log", hint="Filename")
+        dpg.add_text("Time(s):")
+        dpg.add_input_int(tag="duration", width=80, default_value=5, min_value=1)
+        dpg.add_button(label="Start Capture", callback=start_capture_callback)
 
-        dpg.add_spacer(width=50)
+    dpg.add_separator()
+    dpg.add_spacer(height=5)
 
-
-    # --- SPLIT LOG MONITORS ---
+    # --- SINGLE MONITOR ON RIGHT ---
     with dpg.group(horizontal=True):
-        # Left: DSI Log (width=520)
-        with dpg.child_window(width=520, height=-1, border=True):
+        # We push it to the right by using a spacer or just letting it fill
+        # If you want it specifically "on the right" visually but taking up space:
+        dpg.add_spacer(width=20) 
+        
+        with dpg.child_window(width=-1, height=-1, border=True):
             dpg.add_text("--- UUT Serial Log ---", color=(100, 255, 100))
             dpg.add_child_window(tag="log_window_uut", autosize_x=True, autosize_y=True)
 
@@ -474,4 +367,3 @@ dpg.setup_dearpygui()
 dpg.show_viewport()
 dpg.start_dearpygui()
 dpg.destroy_context()
-
