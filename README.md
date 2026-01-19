@@ -98,9 +98,3 @@ host-side/
   ```bash
   python setup/setup.py
   ```
-
----
-
-## License
-
-[Add license information here, if applicable]
