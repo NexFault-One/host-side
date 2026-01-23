@@ -45,6 +45,7 @@ class SerialDevice:
                 return
             self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
             print(f"Connection successful!")
+            self.handshake(5)
         except (OSError, serial.SerialException) as e:
             print("Error opening serial port: ", e)
             self.ser = None
@@ -116,6 +117,15 @@ class SerialDevice:
             print ("provided message is invalid, cannot be written.")
             return False
 
+        self.ser.write(message)
+        self.ser.flush()
+        print(message)
+        return True
+    
+    def write_raw(self, message):
+        """
+        Writes message ignoring protobuf structure and safety checks
+        """
         self.ser.write(message)
         self.ser.flush()
         print(message)
@@ -271,3 +281,23 @@ class SerialDevice:
             time.sleep(0.25)
         print("Read complete! (simulated)")
         return data
+    
+    def handshake(self, timeout):
+        # identify and acknowledge device type.
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if self.ser.in_waiting > 0:
+                message = self.ser.read(self.ser.in_waiting).decode("utf-8").strip()
+
+                if "DSI" in message:
+                    print("DSI found")
+                    self.write_raw(b"<ACK:DSI>")
+                    time.sleep(1)
+                    return True
+                
+                elif "UUT" in message:
+                    print("UUT found")
+                    self.write_raw(b"<ACK:UUT>")
+                    time.sleep(1)
+                    return True
+        raise TimeoutError("No device identification received.")
