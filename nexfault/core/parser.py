@@ -288,7 +288,6 @@ class SerialDevice:
         while time.time() - start_time < timeout:
             if self.ser.in_waiting > 0:
                 message = self.ser.read(self.ser.in_waiting).decode("utf-8").strip()
-
                 if "DSI" in message:
                     print("DSI found")
                     self.write_raw(b"<ACK:DSI>")
@@ -300,4 +299,5 @@ class SerialDevice:
                     self.write_raw(b"<ACK:UUT>")
                     time.sleep(1)
                     return True
+            time.sleep(0.1)
         raise TimeoutError("No device identification received.")
