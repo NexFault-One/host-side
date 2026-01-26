@@ -19,7 +19,7 @@ running_dsi = False
 
 # -----------------
 # Serial Reader Loop
-# ----------------- 
+# -----------------
 def reader_loop_dsi(simulated=False):
     """Background loop for DSI (Control Device)"""
     global ser_dsi, running_dsi
@@ -30,7 +30,7 @@ def reader_loop_dsi(simulated=False):
             msg = f"[DSI Sim] Heartbeat {time.strftime('%H:%M:%S')}\n\n"
             dpg.add_text(msg, parent="log_window_dsi")
             dpg.set_y_scroll("log_window_dsi", -1)
-        else: 
+        else:
             try:
                 if ser_dsi and ser_dsi.in_waiting:
                     line = ser_dsi.readline().decode(errors="ignore").strip()
@@ -121,7 +121,7 @@ def start_capture_dsi_callback():
     threading.Thread(target=_capture_backend, args=(dur_val, run_name), daemon=True).start()
 
 # -----------------
-# Callbacks
+# Toggle Connection Callbacks
 # -----------------
 def toggle_dsi_connection():
     global ser_dsi, running_dsi
@@ -142,7 +142,7 @@ def toggle_dsi_connection():
 
         try:
             ser_dsi = serial.Serial(port, baud, timeout=1)
-            ser_dsi.dtr = False 
+            ser_dsi.dtr = False
             ser_dsi.rts = False
             dpg.set_value("dsi_status", "Connected")
             dpg.configure_item("dsi_status", color=(0, 200, 0))
@@ -166,6 +166,9 @@ def toggle_dsi_connection():
         dpg.configure_item("btn_connect_dsi", label="Connect DSI")
         dpg.add_text("[Info] Disconnected\n\n", parent="log_window_dsi")
 
+# -----------------
+# Command & Injection Logic
+# -----------------
 def toggle_injection_fields(sender, app_data):
     if app_data == "Inject":
         dpg.configure_item("injection_params_group", show=True)
@@ -192,7 +195,7 @@ def send_command_callback():
 
     try:
         main_command = dpg.get_value("main_command_dropdown")
-        seq_id = int(time.time() * 1000) % 65535 
+        seq_id = int(time.time() * 1000) % 65535
 
         message = uart_data_pb2.DsiCommand()
         message.proto_version = 1
@@ -210,35 +213,41 @@ def send_command_callback():
             message.cmd = uart_data_pb2.CommandType.CMD_INJECT
             inj_type = dpg.get_value("injection_type_dropdown")
             start_offset = dpg.get_value("inject_offset")
-            length = dpg.get_value("inject_length")
             duration = dpg.get_value("inject_duration")
             message.duration_ms = duration
 
             if inj_type == "Byte Drop":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
+                # Pull length only for Byte Drop
+                drop_len = dpg.get_value("inject_length")
                 message.byte_drop.start_offset = start_offset
-                message.byte_drop.length = length
-                pattern_str = dpg.get_value("inject_drop_pattern")
-                dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={length})\n\n", parent="log_window_dsi")
+                message.byte_drop.length = drop_len
+                dpg.add_text(f"[TX] Inject ByteDrop (off={start_offset}, len={drop_len})\n\n", parent="log_window_dsi")
 
             elif inj_type == "Bit Flip":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_BIT_FLIP
+                mode = dpg.get_value("bit_flip_mode")
                 message.bit_flip.start_offset = start_offset
-                message.bit_flip.length = length
-                mask_str = dpg.get_value("inject_xor_mask")
-                try:
-                    clean_mask = mask_str.replace(" ", "").replace("0x", "")
-                    message.bit_flip.xor_mask = bytes.fromhex(clean_mask)
-                except ValueError:
-                    dpg.add_text("[Error] Invalid XOR Mask\n\n", parent="log_window_dsi")
-                    return
-                dpg.add_text(f"[TX] Inject BitFlip (off={start_offset}, len={length}, mask={clean_mask})\n\n", parent="log_window_dsi")
+                
+                if mode == "MANUAL":
+                    mask_str = dpg.get_value("inject_xor_mask")
+                    try:
+                        clean_mask = mask_str.replace(" ", "").replace("0x", "")
+                        message.bit_flip.xor_mask = bytes.fromhex(clean_mask)
+                    except ValueError:
+                        dpg.add_text("[Error] Invalid XOR Mask Hex\n\n", parent="log_window_dsi")
+                        return
+                else:
+                    message.bit_flip.random = True
+
+                dpg.add_text(f"[TX] Inject BitFlip ({mode}, off={start_offset})\n\n", parent="log_window_dsi")
 
             elif inj_type == "Phantom Byte":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_PHANTOM_BYTE
                 mode = dpg.get_value("phantom_mode")
                 
                 if mode == "MANUAL":
+                    message.phantom.offset = start_offset
                     hex_val = dpg.get_value("phantom_val").replace("0x", "")
                     try:
                         val_int = int(hex_val, 16)
@@ -248,7 +257,6 @@ def send_command_callback():
                     except ValueError:
                         dpg.add_text("[Error] Phantom Byte must be 00-FF\n\n", parent="log_window_dsi")
                         return
-                    message.phantom.offset = start_offset
                 else:
                     message.phantom.random = True
                 
@@ -267,10 +275,6 @@ def send_command_callback():
     except Exception as e:
         dpg.add_text(f"[Error] {e}\n\n", parent="log_window_dsi")
 
-def get_ports():
-    ports = [p.device for p in serial.tools.list_ports.comports()]
-    return ports + ["Simulated Device"] if ports else ["Simulated Device"]
-
 # -----------------
 # GUI Setup
 # -----------------
@@ -278,14 +282,17 @@ dpg.create_context()
 dpg.create_viewport(title="DSI Controller", width=800, height=800)
 
 with dpg.window(label="DSI Monitor", width=1900, height=980, pos=(0, 0)):
+    # --- CONNECTION ---
     dpg.add_text("DSI Connection", color=(100, 255, 100))
     with dpg.group(horizontal=True):
-        dpg.add_combo(get_ports(), tag="dsi_port", width=150, default_value="Select Port")
+        dpg.add_combo([p.device for p in serial.tools.list_ports.comports()] + ["Simulated Device"], tag="dsi_port", width=150, default_value="Simulated Device")
         dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="115200")
         dpg.add_button(label="Connect DSI", tag="btn_connect_dsi", callback=toggle_dsi_connection)
         dpg.add_text("Disconnected", tag="dsi_status", color=(200, 50, 50))
 
     dpg.add_separator()
+    
+    # --- COMMAND & INJECTION ---
     dpg.add_text("Injection Control", color=(255, 200, 80))
     with dpg.group(horizontal=True):
         dpg.add_combo(items=["Ping", "Abort", "Inject"], tag="main_command_dropdown", default_value="Ping", width=120, callback=toggle_injection_fields)
@@ -293,24 +300,30 @@ with dpg.window(label="DSI Monitor", width=1900, height=980, pos=(0, 0)):
         dpg.add_progress_bar(tag="progress_bar", default_value=0.0, width=200, overlay="Progress")
 
     with dpg.group(tag="injection_params_group", show=False):
+        dpg.add_spacer(height=5)
         with dpg.group(horizontal=True):
             dpg.add_text("Type:")
             dpg.add_combo(items=["Byte Drop", "Bit Flip", "Phantom Byte"], tag="injection_type_dropdown", default_value="Byte Drop", width=120, callback=update_dynamic_fields)
             dpg.add_text("Offset:")
             dpg.add_input_int(tag="inject_offset", width=70, min_value=0, default_value=0)
-            dpg.add_text("Length:")
-            dpg.add_input_int(tag="inject_length", width=70, min_value=1, default_value=1)
             dpg.add_text("Duration(ms):")
             dpg.add_input_int(tag="inject_duration", width=70, min_value=0, default_value=0)
             
+        # Byte Drop Group - includes Length
         with dpg.group(tag="byte_drop_group", show=True, horizontal=True):
+            dpg.add_text("Length:", color=(255, 150, 50))
+            dpg.add_input_int(tag="inject_length", width=70, min_value=1, default_value=1)
             dpg.add_text("Pattern:", color=(255, 200, 100))
             dpg.add_input_text(tag="inject_drop_pattern", width=100)
 
+        # Bit Flip Group - Length removed
         with dpg.group(tag="xor_mask_group", show=False, horizontal=True):
+            dpg.add_text("Mode:")
+            dpg.add_combo(items=["RANDOM", "MANUAL"], tag="bit_flip_mode", default_value="MANUAL", width=90)
             dpg.add_text("Mask(Hex):", color=(255, 100, 100))
             dpg.add_input_text(tag="inject_xor_mask", width=100, default_value="FF")
 
+        # Phantom Byte Group - Length removed
         with dpg.group(tag="phantom_byte_group", show=False, horizontal=True):
             dpg.add_text("Mode:")
             dpg.add_combo(items=["RANDOM", "MANUAL"], tag="phantom_mode", default_value="MANUAL", width=90)
@@ -318,6 +331,8 @@ with dpg.window(label="DSI Monitor", width=1900, height=980, pos=(0, 0)):
             dpg.add_input_text(tag="phantom_val", width=60, default_value="00")
 
     dpg.add_separator()
+    
+    # --- DATA CAPTURE ---
     dpg.add_text("Data Capture", color=(100, 255, 100))
     with dpg.group(horizontal=True):
         dpg.add_input_text(tag="run_name_dsi", width=150, default_value="dsi_log")
@@ -330,6 +345,3 @@ dpg.setup_dearpygui()
 dpg.show_viewport()
 dpg.start_dearpygui()
 dpg.destroy_context()
-
-
-
