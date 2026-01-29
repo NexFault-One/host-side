@@ -3,7 +3,7 @@ from . import parser
 
 # main script intended to faciliate fast debug of backend code
 # TODO: edit information as nescessary for your serial device.
-SERIAL_PORT = "COM8" # check device manager / pio for com ports
+SERIAL_PORT = "COM6" # check device manager / pio for com ports
 BAUD_RATE = 9600
 READ_DURATION = 3
 LOG_FILE_NAME = "test"
@@ -26,7 +26,7 @@ def main():
     else:
         print ("invalid data provided.")
         print (env)
-    # testdevice.write_buffer(env)
+    testdevice.write_buffer(env)
 
     # ---------- read and return data ----------
     print ("attempting read test")
@@ -39,6 +39,8 @@ def main():
     log = logger.LogFile(LOG_FILE_NAME)
     log.log_csv(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
     log.log_json(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
+    log.log_db(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
+    print ("main complete!")
 
 if __name__ == "__main__":
     main()
