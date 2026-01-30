@@ -223,22 +223,29 @@ def send_command_callback():
 
             elif inj_type == "Phantom Byte":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_PHANTOM_BYTE
-                phantom_payload = dpg.get_value("phantom_payload_input")
-                if not phantom_payload: return
-                message.phantom.payload = phantom_payload
-                
                 mode = dpg.get_value("phantom_mode_dropdown")
                 if mode == "MANUAL":
-                    message.phantom.mode = uart_data_pb2.PhantomByteMode.PHANTOM_MANUAL
-                    message.phantom.offset = start_offset
+                    message.phantom_byte.mode = uart_data_pb2.PhantomByteMode.PHANTOM_MANUAL
+                    message.phantom_byte.offset = start_offset
                     hex_val = dpg.get_value("phantom_hex_input").replace("0x", "")
                     try:
-                        message.phantom.byte_val = int(hex_val, 16)
-                    except: return
+                        message.phantom_byte.byte_value = int(hex_val, 16)
+                    except Exception as e:
+                        dpg.add_text(f"PHANTOM DROP ERROR: {e}\n\n", parent="log_window_dsi")
+                        return
                 else:
-                    message.phantom.mode = uart_data_pb2.PhantomByteMode.PHANTOM_RANDOM
-                
-                dpg.add_text(f"[TX] Inject Phantom ({mode}, offset={start_offset}, payload='{phantom_payload}')\n\n", parent="log_window_dsi")
+                    message.phantom_byte.mode = uart_data_pb2.PhantomByteMode.PHANTOM_RANDOM
+                    hex_val = dpg.get_value("phantom_hex_input").replace("0x", "")
+                    try:
+                        message.phantom_byte.byte_value = int(hex_val, 16)
+                    except Exception as e:
+                        dpg.add_text(f"PHANTOM DROP ERROR: {e}\n\n", parent="log_window_dsi")
+                        return
+
+                pattern_str = dpg.get_value("phantom_payload_input")
+                if not pattern_str: return
+                message.phantom_byte.payload = pattern_str
+                dpg.add_text(f"[TX] Inject Phantom ({mode}, offset={start_offset}, payload='{pattern_str}')\n\n", parent="log_window_dsi")
 
         payload = message.SerializeToString()
         frame = struct.pack("<H", len(payload)) + payload
@@ -258,7 +265,7 @@ with dpg.window(label="DSI Monitor", width=1900, height=980, pos=(0, 0)):
     dpg.add_text("DSI Connection", color=(100, 255, 100))
     with dpg.group(horizontal=True):
         dpg.add_combo([p.device for p in serial.tools.list_ports.comports()] + ["Simulated Device"], tag="dsi_port", width=150, default_value="Simulated Device")
-        dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="115200")
+        dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="9600")
         dpg.add_button(label="Connect DSI", tag="btn_connect_dsi", callback=toggle_dsi_connection)
         dpg.add_text("Disconnected", tag="dsi_status", color=(200, 50, 50))
 
