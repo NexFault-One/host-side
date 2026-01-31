@@ -153,7 +153,7 @@ class SerialDevice:
 
 # ------------------------------------------- INJECTIONS ----------------------------------------------
 
-    def byte_drop(self, seq_id = 1, start_offset = 0, length = 1, payload = "default", duration = 0):
+    def byte_drop(self, seq_id = 1, start_offset = 0, length = 1, payload = "default", transport = uart_data_pb2.TransportType.TRANSPORT_UART, duration = 0):
         """
         Helper for byte drop injection
         """
@@ -163,6 +163,8 @@ class SerialDevice:
         message.id = seq_id
         message.cmd = uart_data_pb2.CommandType.CMD_INJECT
         message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
+        message.transport = transport
+        message.duration_ms = duration
         message.byte_drop.start_offset = start_offset
         message.byte_drop.length = length
         message.byte_drop.payload = payload
@@ -175,7 +177,7 @@ class SerialDevice:
 
         return data
     
-    def bit_flip(self, seq_id = 1, start_offset = 0, length = 1, xor_mask = 0, duration = 0):
+    def bit_flip(self, seq_id = 1, every_n_p = 2, bits_drop = 1, payload = "default", bit_flip_mode = uart_data_pb2.BitFlipMode.BITFLIP_RANDOM, transport = uart_data_pb2.TransportType.TRANSPORT_UART, duration = 0):
         """
         Helper for bit flip injection
         """
@@ -184,10 +186,38 @@ class SerialDevice:
         message.proto_version = 1
         message.id = seq_id
         message.cmd = uart_data_pb2.CommandType.CMD_INJECT
-        message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
-        message.byte_drop.start_offset = start_offset
-        message.byte_drop.length = length
-        message.xor_mask = xor_mask
+        message.inj_type = uart_data_pb2.InjectionType.INJ_BIT_FLIP
+        message.transport = transport
+        message.duration_ms = duration
+        message.bit_flip.every_n_p = every_n_p
+        message.bit_flip.bits_drop = bits_drop
+        message.bit_flip.payload = payload
+        message.bit_flip.mode = bit_flip_mode
+
+        data = message.SerializeToString()
+
+        # if getattr(self, "_simulate", False): #simulate value
+        #     print (f"[SIM TX] {frame.hex(' ')}")
+        #     return 
+
+        return data
+    
+    def phantom_byte(self, seq_id = 1, offset = 0, byte_value = 0, payload = "default", phantom_byte_mode = uart_data_pb2.PhantomByteMode.PHANTOM_RANDOM, transport = uart_data_pb2.TransportType.TRANSPORT_UART, duration = 0):
+        """
+        Helper for phantom byte injection
+        """
+
+        message = uart_data_pb2.DsiCommand()
+        message.proto_version = 1
+        message.id = seq_id
+        message.cmd = uart_data_pb2.CommandType.CMD_INJECT
+        message.inj_type = uart_data_pb2.InjectionType.INJ_PHANTOM_BYTE
+        message.transport = transport
+        message.duration_ms = duration
+        message.phantom_byte.offset = offset
+        message.phantom_byte.byte_value = byte_value
+        message.phantom_byte.payload = payload
+        message.phantom_byte.mode = phantom_byte_mode
 
         data = message.SerializeToString()
 
