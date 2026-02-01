@@ -156,18 +156,14 @@ def toggle_injection_fields(sender, app_data):
     dpg.configure_item("injection_params_group", show=(app_data == "Inject"))
 
 def update_dynamic_fields(sender, app_data):
-    # Toggle individual group visibility based on injection type
     dpg.configure_item("byte_drop_group", show=(app_data == "Byte Drop"))
     dpg.configure_item("xor_mask_group", show=(app_data == "Bit Flip"))
     dpg.configure_item("phantom_byte_group", show=(app_data == "Phantom Byte"))
     
     # Hide the general Length input specifically for Phantom Byte
-    if app_data == "Phantom Byte":
-        dpg.configure_item("inject_length_text", show=False)
-        dpg.configure_item("inject_length", show=False)
-    else:
-        dpg.configure_item("inject_length_text", show=True)
-        dpg.configure_item("inject_length", show=True)
+    is_phantom = (app_data == "Phantom Byte")
+    dpg.configure_item("inject_length_text", show=not is_phantom)
+    dpg.configure_item("inject_length", show=not is_phantom)
 
 def send_command_callback():
     global ser_dsi
@@ -180,6 +176,18 @@ def send_command_callback():
         message = uart_data_pb2.DsiCommand()
         message.proto_version = 1
         message.id = seq_id
+
+        # --- Transport Selection Bitmask ---
+        # Based on: TRANSPORT_UART = 1, TRANSPORT_MODBUS = 2 (standard proto bitmask logic)
+        transport_val = 0
+        if dpg.get_value("use_uart"): transport_val |= 1 # TRANSPORT_UART
+        if dpg.get_value("use_modbus"): transport_val |= 2 # TRANSPORT_MODBUS
+        
+        if transport_val == 0:
+            dpg.add_text("[Error] Please select at least one Transport type\n\n", parent="log_window_dsi")
+            return
+        
+        message.transport = transport_val
 
         if main_command == "Ping":
             message.cmd = uart_data_pb2.CommandType.CMD_PING
@@ -210,11 +218,12 @@ def send_command_callback():
                 message.bit_flip.every_n_p = start_offset
                 message.bit_flip.bits_drop = length
                 
+                # Image Reference Enum: BITFLIP_RANDOM=0, BITFLIP_PERIODIC=1
                 mode = dpg.get_value("bitflip_mode_dropdown")
                 if mode == "RANDOM":
-                    message.bit_flip.mode = uart_data_pb2.BitFlipMode.BITFLIP_RANDOM
+                    message.bit_flip.mode = 0 # BITFLIP_RANDOM
                 else:
-                    message.bit_flip.mode = uart_data_pb2.BitFlipMode.BITFLIP_PERIODIC
+                    message.bit_flip.mode = 1 # BITFLIP_PERIODIC
 
                 pattern_str = dpg.get_value("inject_xor_mask")
                 if not pattern_str: return
@@ -223,29 +232,23 @@ def send_command_callback():
 
             elif inj_type == "Phantom Byte":
                 message.inj_type = uart_data_pb2.InjectionType.INJ_PHANTOM_BYTE
+                phantom_payload = dpg.get_value("phantom_payload_input")
+                if not phantom_payload: return
+                message.phantom.payload = phantom_payload
+                
+                # Image Reference Enum: PHANTOM_RANDOM=0, PHANTOM_MANUAL=1
                 mode = dpg.get_value("phantom_mode_dropdown")
                 if mode == "MANUAL":
-                    message.phantom_byte.mode = uart_data_pb2.PhantomByteMode.PHANTOM_MANUAL
-                    message.phantom_byte.offset = start_offset
+                    message.phantom.mode = 1 # PHANTOM_MANUAL
+                    message.phantom.offset = start_offset
                     hex_val = dpg.get_value("phantom_hex_input").replace("0x", "")
                     try:
-                        message.phantom_byte.byte_value = int(hex_val, 16)
-                    except Exception as e:
-                        dpg.add_text(f"PHANTOM DROP ERROR: {e}\n\n", parent="log_window_dsi")
-                        return
+                        message.phantom.byte_val = int(hex_val, 16)
+                    except: return
                 else:
-                    message.phantom_byte.mode = uart_data_pb2.PhantomByteMode.PHANTOM_RANDOM
-                    hex_val = dpg.get_value("phantom_hex_input").replace("0x", "")
-                    try:
-                        message.phantom_byte.byte_value = int(hex_val, 16)
-                    except Exception as e:
-                        dpg.add_text(f"PHANTOM DROP ERROR: {e}\n\n", parent="log_window_dsi")
-                        return
-
-                pattern_str = dpg.get_value("phantom_payload_input")
-                if not pattern_str: return
-                message.phantom_byte.payload = pattern_str
-                dpg.add_text(f"[TX] Inject Phantom ({mode}, offset={start_offset}, payload='{pattern_str}')\n\n", parent="log_window_dsi")
+                    message.phantom.mode = 0 # PHANTOM_RANDOM
+                
+                dpg.add_text(f"[TX] Inject Phantom ({mode}, offset={start_offset}, payload='{phantom_payload}')\n\n", parent="log_window_dsi")
 
         payload = message.SerializeToString()
         frame = struct.pack("<H", len(payload)) + payload
@@ -262,14 +265,25 @@ dpg.create_context()
 dpg.create_viewport(title="DSI Controller", width=950, height=850)
 
 with dpg.window(label="DSI Monitor", width=1900, height=980, pos=(0, 0)):
+    # --- CONNECTION ---
     dpg.add_text("DSI Connection", color=(100, 255, 100))
     with dpg.group(horizontal=True):
         dpg.add_combo([p.device for p in serial.tools.list_ports.comports()] + ["Simulated Device"], tag="dsi_port", width=150, default_value="Simulated Device")
-        dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="9600")
+        dpg.add_combo(("9600", "57600", "115200"), tag="dsi_baud", width=80, default_value="115200")
         dpg.add_button(label="Connect DSI", tag="btn_connect_dsi", callback=toggle_dsi_connection)
         dpg.add_text("Disconnected", tag="dsi_status", color=(200, 50, 50))
 
     dpg.add_separator()
+
+    # --- TRANSPORT SELECTION ---
+    dpg.add_text("Transport Protocol Selection", color=(150, 150, 255))
+    with dpg.group(horizontal=True):
+        dpg.add_checkbox(label="UART", tag="use_uart", default_value=True)
+        dpg.add_checkbox(label="Modbus", tag="use_modbus", default_value=False)
+
+    dpg.add_separator()
+    
+    # --- COMMAND & INJECTION ---
     dpg.add_text("Injection Control", color=(255, 200, 80))
     with dpg.group(horizontal=True):
         dpg.add_combo(items=["Ping", "Abort", "Inject"], tag="main_command_dropdown", default_value="Ping", width=120, callback=toggle_injection_fields)
