@@ -40,6 +40,8 @@ def main():
     log.log_csv(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
     log.log_json(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
     log.log_db(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
+    print(log.retrieve_tests())
+    print(log.retrieve_logs("test"))
     print ("main complete!")
 
 if __name__ == "__main__":

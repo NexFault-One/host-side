@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     DateTime,
     JSON,
+    LargeBinary
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -25,9 +26,13 @@ class LogEntry(Base):
     __tablename__ = "logs"
 
     id = Column(Integer, primary_key=True)
+    test_name = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    log_name = Column(String, nullable=False)
-    data = Column(JSON, nullable=False)
+    log_timestamp = Column(String)
+    raw_data = Column(LargeBinary)
+    hex_data = Column(String)
+    ascii_data = Column(String)
+    data_type = Column(String)
 
 Base.metadata.create_all(engine)
 
@@ -113,29 +118,40 @@ class LogFile:
         if len(params) != len(data[0]):
             print ("params do not match values!")
             return None
-        sanitized_data = self.sanitize_json(data)
-        
 
         session = SessionLocal()
 
         try:
-            for row in sanitized_data:
+            p = {name: i for i, name in enumerate(params)}
 
-                entry_data = {}
+            for row in data:
 
-                # hard coded sanitization for python data types
-                for i in range(len(params)):
-                    key = params[i]
-                    value = row[i]
+                raw_val = row[p.get("Data (Raw)")]
+                if not isinstance(raw_val, bytes):
+                    raw_val = str(raw_val).encode("utf-8")
 
-                    if key == "Data Type" and isinstance(value, type):
-                        value = f"{value.__module__}.{value.__name__}"
+                hex_val = row[p.get("Data (Hex)")]
+                if isinstance(hex_val, bytes):
+                    hex_val = hex_val.hex()
 
-                    entry_data[key] = value
+                ascii_val = row[p.get("Data (ASCII)")]
+                if isinstance(ascii_val, bytes):
+                    ascii_val = ascii_val.decode("utf-8", "ignore")
+                ascii_val = str(ascii_val).replace("\r", "").replace("\n", "")
+
+                dtype_val = row[p.get("Data Type")]
+                if hasattr(dtype_val, "module") and hasattr(dtype_val, "name"):
+                    dtype_str = f"{dtype_val.module}.{dtype_val.name}"
+                else:
+                    dtype_str = str(dtype_val)
 
                 log_entry = LogEntry(
-                    log_name=self.name,
-                    data=entry_data,
+                    test_name=self.name,
+                    log_timestamp=str(row[p.get("Timestamp")]),
+                    raw_data=raw_val,
+                    hex_data=str(hex_val),
+                    ascii_data=ascii_val,
+                    data_type=dtype_str
                 )
 
                 session.add(log_entry)
@@ -144,7 +160,51 @@ class LogFile:
         
         except Exception as e:
             session.rollback()
+            print(f"Database Error: {e}")
             raise e
         
+        finally:
+            session.close()
+
+    def retrieve_logs(self, testname: str):
+        """
+        Searches the database for any entries with the specified test name.
+        """
+
+        session = SessionLocal()
+        try:
+            results = session.query(LogEntry).filter(LogEntry.test_name == testname).all()
+
+            output = []
+            for entry in results:
+                output.append({
+                    "id": entry.id,
+                    "test_name": entry.test_name,
+                    "log_timestamp": entry.log_timestamp,
+                    "created_at": entry.created_at,
+                    "raw_data": entry.raw_data,
+                    "hex_data": entry.hex_data,
+                    "ascii_data": entry.ascii_data,
+                    "data_type": entry.data_type
+                })
+            return output
+        except Exception as e:
+            print(f"Error retrieving test: {e}")
+            return []
+        finally:
+            session.close()
+    
+    def retrieve_tests(self):
+        """
+        Returns all unique test names
+        """
+        session = SessionLocal()
+        try:
+            query = session.query(LogEntry.test_name).distinct().all()
+            unique_tests = [name[0] for name in query]
+            return unique_tests
+        except Exception as e:
+            print(f"Error retrieving test names: {e}")
+            return []
         finally:
             session.close()
