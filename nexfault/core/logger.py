@@ -2,6 +2,7 @@ import csv
 import json
 from pathlib import Path
 from datetime import datetime
+from typing import List, Optional
 from sqlalchemy import (
     create_engine,
     Column,
@@ -9,17 +10,21 @@ from sqlalchemy import (
     String,
     DateTime,
     JSON,
-    LargeBinary
+    LargeBinary,
 )
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+import base64
 
-# always direct to host-side/logs, assuming logger.py is present in parser-core folder. modify if necessary.
+
+# DB setup
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 DB_PATH = LOG_DIR / "logs.db"
 DB_URL = f"sqlite:///{DB_PATH}"
 
-engine = create_engine(DB_URL, echo=False)
-SessionLocal = sessionmaker(bind=engine)
+engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 class LogEntry(Base):
@@ -36,7 +41,56 @@ class LogEntry(Base):
 
 Base.metadata.create_all(engine)
 
-# log file creation and manipulation logic
+# API HELPER
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# API FRAMEWORK
+app = FastAPI(title="LogParser")
+
+# ENDPOINTS
+@app.get("/tests", response_model=List[str])
+def list_unique_tests(db: Session = Depends(get_db)):
+    """
+    Returns a list of all unique test names.
+    """
+    query = db.query(LogEntry.test_name).distinct().all()
+    return [name[0] for name in query]
+
+@app.get("/tests/{test_name}")
+def get_logs_for_test(test_name: str, db: Session = Depends(get_db)):
+    """
+    Retrieves all entries for a specific test name.
+    """
+    results = db.query(LogEntry).filter(LogEntry.test_name == test_name).all()
+
+    if not results:
+        raise HTTPException(status_code=404, detail="test was not found.")
+    
+    output = []
+    for entry in results:
+        b64_data = None
+        if entry.raw_data:
+            b64_data = base64.b64encode(entry.raw_data).decode('utf-8')
+
+        output.append({
+            "id": entry.id,
+            "test_name": entry.test_name,
+            "log_timestamp": entry.log_timestamp,
+            "created_at": entry.created_at,
+            "raw_data": b64_data, 
+            "hex_data": entry.hex_data,
+            "ascii_data": entry.ascii_data,
+            "data_type": entry.data_type
+        })
+    return output
+
+
+# internal log file creation and manipulation logic
 class LogFile:
 
     def __init__(self, name):
@@ -208,3 +262,7 @@ class LogFile:
             return []
         finally:
             session.close()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
