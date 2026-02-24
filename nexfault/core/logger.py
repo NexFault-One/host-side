@@ -11,10 +11,13 @@ from sqlalchemy import (
     DateTime,
     JSON,
     LargeBinary,
+    ForeignKey,
 )
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
+import bcrypt
 import base64
 
 
@@ -27,10 +30,13 @@ engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+security = HTTPBasic()
+
 class LogEntry(Base):
     __tablename__ = "logs"
 
     id = Column(Integer, primary_key=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     test_name = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     log_timestamp = Column(String)
@@ -39,7 +45,28 @@ class LogEntry(Base):
     ascii_data = Column(String)
     data_type = Column(String)
 
+    owner = relationship("User", back_populates="logs")
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+
+    logs = relationship("LogEntry", back_populates="owner")
+
 Base.metadata.create_all(engine)
+
+def hash_password(password: str) -> str:
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pwd_bytes, salt)
+    return hashed.decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    password_bytes = plain_password.encode('utf-8')
+    hashed_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 # API HELPER
 def get_db():
@@ -49,24 +76,51 @@ def get_db():
     finally:
         db.close()
 
+# USER VERIFICATION
+def get_current_user(credentials: HTTPBasicCredentials = Depends(security), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == credentials.username).first()
+    
+    if not user or not verify_password(credentials.password, user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Invalid username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return user
+
 # API FRAMEWORK
 app = FastAPI(title="LogParser")
 
 # ENDPOINTS
+@app.post("/users/register")
+def register_user(username: str, password: str, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.username == username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username taken")
+    
+    new_user = User(
+        username=username, 
+        hashed_password=hash_password(password)
+    )
+    db.add(new_user)
+    db.commit()
+    return {"message": "User created successfully"}
+
 @app.get("/tests", response_model=List[str])
-def list_unique_tests(db: Session = Depends(get_db)):
+def list_unique_tests(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Returns a list of all unique test names.
     """
-    query = db.query(LogEntry.test_name).distinct().all()
+    query = db.query(LogEntry.test_name).filter(LogEntry.owner_id == current_user.id).distinct().all()
     return [name[0] for name in query]
 
 @app.get("/tests/{test_name}")
-def get_logs_for_test(test_name: str, db: Session = Depends(get_db)):
+def get_logs_for_test(test_name: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Retrieves all entries for a specific test name.
     """
-    results = db.query(LogEntry).filter(LogEntry.test_name == test_name).all()
+
+    results = db.query(LogEntry).filter(LogEntry.test_name == test_name, LogEntry.owner_id == current_user.id).all()
 
     if not results:
         raise HTTPException(status_code=404, detail="test was not found.")
@@ -93,12 +147,13 @@ def get_logs_for_test(test_name: str, db: Session = Depends(get_db)):
 # internal log file creation and manipulation logic
 class LogFile:
 
-    def __init__(self, name):
+    def __init__(self, name, owner_id):
         """
         Creates file in parser-core/logs. The intended name of the log file should be provided by caller.
         """
 
         self.name = name
+        self.owner_id = owner_id
         Path(LOG_DIR).mkdir(exist_ok=True)
     
     def log_csv(self, headers: list[str], rows: list[list[str]]):
@@ -201,6 +256,7 @@ class LogFile:
 
                 log_entry = LogEntry(
                     test_name=self.name,
+                    owner_id = self.owner_id,
                     log_timestamp=str(row[p.get("Timestamp")]),
                     raw_data=raw_val,
                     hex_data=str(hex_val),
@@ -227,7 +283,7 @@ class LogFile:
 
         session = SessionLocal()
         try:
-            results = session.query(LogEntry).filter(LogEntry.test_name == testname).all()
+            results = session.query(LogEntry).filter(LogEntry.test_name == testname, LogEntry.owner_id == self.owner_id).all()
 
             output = []
             for entry in results:
