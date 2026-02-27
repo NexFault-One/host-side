@@ -71,7 +71,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     hashed_bytes = hashed_password.encode('utf-8')
     return bcrypt.checkpw(password_bytes, hashed_bytes)
 
-# API HELPER
+# db access for api
 def get_db():
     db = SessionLocal()
     try:
@@ -79,27 +79,26 @@ def get_db():
     finally:
         db.close()
 
-# USER VERIFICATION
+# function for user verification
 def get_current_user(credentials: HTTPBasicCredentials = Depends(security), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == credentials.username).first()
     
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(
             status_code=401,
-            detail="Unauthorized: Invalid username or password",
+            detail="Invalid username or password.",
             headers={"WWW-Authenticate": "Basic"},
         )
     return user
 
-# API FRAMEWORK
+# api calls and access
 app = FastAPI(title="LogParser")
 
-# ENDPOINTS
 @app.post("/users/register")
 def register_user(username: str, password: str, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.username == username).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Username taken")
+        raise HTTPException(status_code=400, detail=f"Username {username} is already taken.")
     
     new_user = User(
         username=username, 
@@ -107,7 +106,7 @@ def register_user(username: str, password: str, db: Session = Depends(get_db)):
     )
     db.add(new_user)
     db.commit()
-    return {"message": "User created successfully"}
+    return {"message": "User created successfully."}
 
 @app.get("/tests", response_model=List[str])
 def list_unique_tests(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -126,7 +125,7 @@ def get_logs_for_test(test_name: str, db: Session = Depends(get_db), current_use
     results = db.query(LogEntry).filter(LogEntry.test_name == test_name, LogEntry.owner_id == current_user.id).all()
 
     if not results:
-        raise HTTPException(status_code=404, detail="test was not found.")
+        raise HTTPException(status_code=404, detail=f"Test {test_name} for user {current_user} was not found.")
     
     output = []
     for entry in results:
@@ -195,7 +194,7 @@ class LogFile:
         """
 
         if len(params) != len(data[0]):
-            print ("parameters do not match values.")
+            print(f"{len(params)} Given parameters do not match {len(data[0])} values provided.")
             return None
 
         sanitized_data = self.sanitize_json(data)
@@ -229,7 +228,7 @@ class LogFile:
         """
         user = session.query(User).filter(User.username == self.username).first()
         if not user:
-            raise ValueError(f"No user found with username '{self.username}'")
+            raise ValueError(f"No user found with username '{self.username}'.")
         return user.id
     
     def log_db(self, params: list[str], data: list[list[str]]):
@@ -241,7 +240,7 @@ class LogFile:
         if not data:
             return None
         if len(params) != len(data[0]):
-            print ("params do not match values!")
+            print(f"{len(params)} Given parameters do not match {len(data[0])} values provided.")
             return None
 
         session = SessionLocal()
