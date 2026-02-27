@@ -1,6 +1,6 @@
 from . import logger
 from . import parser
-from .logger import SessionLocal, User, verify_password
+from .logger import SessionLocal, User, verify_password, register_user
 
 # main script intended to faciliate fast debug of backend code
 # TODO: edit information as nescessary for your serial device.
@@ -10,7 +10,7 @@ READ_DURATION = 3
 LOG_FILE_NAME = "test"
 
 # change for unique tests
-USERNAME = "test"
+USERNAME = "test2"
 PASSWORD = "password"
 
 def main():
@@ -21,9 +21,8 @@ def main():
     user = db.query(User).filter(User.username == USERNAME).first()
     
     if not user or not verify_password(PASSWORD, user.hashed_password):
-        print(f"Login failed for user '{USERNAME}'. Check credentials or register first.")
-        db.close()
-        return
+        print("given credentials not registered. adding now.")
+        register_user(USERNAME, PASSWORD, SessionLocal())
     
     owner_id = user.id
     db.close()
