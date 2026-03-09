@@ -2,6 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def run_module(module_name, project_root):
     """Runs module using current interpreter"""
     command = [

@@ -3,6 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def run(cmd):
     subprocess.check_call(cmd, shell=True)
 
@@ -16,7 +17,7 @@ def main():
     run(f"{sys.executable} -m pip install --upgrade pip")
     run(f"{sys.executable} -m pip install -r \"{requirements}\"")
 
-    output = subprocess.check_call(
+    subprocess.check_call(
         ["git", "submodule", "update", "--init", "--recursive"],
         cwd=repo_root,
         text=True

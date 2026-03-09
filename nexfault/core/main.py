@@ -1,6 +1,5 @@
-from . import logger
-from . import parser
-from .logger import SessionLocal, User, verify_password, register_user
+from . import logger, parser
+from .logger import SessionLocal, User, register_user, verify_password
 
 # main script intended to faciliate fast debug of backend code
 # TODO: edit information as nescessary for your serial device.
@@ -18,11 +17,11 @@ def main():
     # ---------- login test ------------------------------
     db = SessionLocal()
     user = db.query(User).filter(User.username == USERNAME).first()
-    
+
     if not user or not verify_password(PASSWORD, user.hashed_password):
         print("given credentials not registered. adding now.")
         register_user(USERNAME, PASSWORD, SessionLocal())
-    
+
     owner_id = user.id
     db.close()
     print(f"Logged in as {USERNAME} (ID: {owner_id})")
@@ -37,7 +36,7 @@ def main():
     # ---------- writetest ----------
     print ("attempting write test")
     env = testdevice.byte_drop()
-    if (testdevice.try_parse_command(env) != None):
+    if (testdevice.try_parse_command(env) is not None):
         print ("valid data provided.")
         print (env, type(env))
     else:
@@ -54,7 +53,14 @@ def main():
     # ---------- logging test ----------
     print ("attempting log test")
     log = logger.LogFile(LOG_FILE_NAME, owner_id=owner_id)
-    headers = ["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"]
+    headers = [
+        "Timestamp",
+        "Length",
+        "Data (Hex)",
+        "Data (ASCII)",
+        "Data (Raw)",
+        "Data Type",
+    ]
     log.log_csv(headers, testdata)
     log.log_json(headers, testdata)
     log.log_db(headers, testdata)

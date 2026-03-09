@@ -1,29 +1,27 @@
+import base64
 import csv
 import json
-from pathlib import Path
 from datetime import datetime
-from typing import List, Optional
+from pathlib import Path
+
+import bcrypt
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import (
-    create_engine,
     Column,
-    Integer,
-    String,
     DateTime,
-    JSON,
-    LargeBinary,
     ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    create_engine,
 )
 from sqlalchemy.orm import (
-    declarative_base,
-    sessionmaker,
     Session,
+    declarative_base,
     relationship,
+    sessionmaker,
 )
-from fastapi import FastAPI, Depends, HTTPException
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.middleware.cors import CORSMiddleware
-import bcrypt
-import base64
 
 # DB setup (local file path). Change connection information here.
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -119,7 +117,7 @@ def register_user(username: str, password: str, db: Session = Depends(get_db)):
     return {"message": "User created successfully."}
 
 
-@app.get("/tests", response_model=List[str])
+@app.get("/tests", response_model=list[str])
 def list_unique_tests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -186,7 +184,7 @@ class LogFile:
         Path(LOG_DIR).mkdir(exist_ok=True)  # try statement?
 
 
-    def log_csv(self, headers: List[str], rows: List[List[str]]):
+    def log_csv(self, headers: list[str], rows: list[list[str]]):
         """Save all logs (provided in nested array form) in .csv format."""
         timestamp = datetime.now().strftime("%H_%M_%S")
         filepath = Path(LOG_DIR) / f"{self.name}_{timestamp}.csv"
@@ -199,7 +197,7 @@ class LogFile:
             writer.writerows(rows)
 
         return filepath
-    
+
 
     def sanitize_json(self, data):
         """
@@ -214,7 +212,7 @@ class LogFile:
             return data
 
 
-    def log_json(self, params: List[str], data: List[List[str]]):
+    def log_json(self, params: list[str], data: list[list[str]]):
         """Save all logs (provided in nested array form) in .json format."""
         if len(params) != len(data[0]):
             print(
@@ -249,7 +247,7 @@ class LogFile:
             json.dump(decoded_data, f, indent=2)
 
         return filepath
-    
+
 
     def _get_owner_id(self, session: Session) -> int:
         """Retrieve the owner ID for the current username."""
@@ -257,9 +255,9 @@ class LogFile:
         if not user:
             raise ValueError(f"No user found with username '{self.username}'.")
         return user.id
-    
-    
-    def log_db(self, params: List[str], data: List[List[str]]):
+
+
+    def log_db(self, params: list[str], data: list[list[str]]):
         """
         Save logs to the SQLite database using SQLAlchemy.
         Sanitizes data and commits. Uses hardcoded parameters.
@@ -319,13 +317,12 @@ class LogFile:
 
         finally:
             session.close()
-            
+
 
     def retrieve_logs(self, testname: str):
         """Search the database for any entries with the specified test name."""
         session = SessionLocal()
         try:
-            owner_id = self._get_owner_id(session)
             results = (
                 session.query(LogEntry)
                 .filter(
@@ -353,7 +350,7 @@ class LogFile:
         finally:
             session.close()
 
-            
+
     def retrieve_tests(self):
         """Return all unique test names."""
         session = SessionLocal()
