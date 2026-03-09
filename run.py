@@ -11,7 +11,7 @@ def run_module(module_name, project_root):
         module_name,
     ]
 
-    print ("> " + " ".join(command))
+    print("> " + " ".join(command))
     return subprocess.Popen(command, cwd=project_root)
 
 
@@ -30,6 +30,7 @@ def main():
 
     for module in modules:
         processes.append(run_module(module, project_root))
+
 
 if __name__ == "__main__":
     main()

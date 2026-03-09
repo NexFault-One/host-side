@@ -33,7 +33,6 @@ class SerialDevice:
             self.description = "Fake Serial (simulated)"
             self.hwid = "SIM-FAKE-PORT"
 
-
     def connect(self):
         """Attempt connection to serial port."""
         try:
@@ -49,30 +48,25 @@ class SerialDevice:
             print("Error opening serial port: ", e)
             self.ser = None
 
-
     def is_connected(self) -> bool:
         """Verify connection to serial port."""
         return (self._simulate and self.ser is not None) or (
             self.ser is not None and self.ser.is_open
         )
 
-
     def fw_ver(self):
         """Get device firmware version."""
         # Must be implemented firmware side
         return "sim-0.1" if self._simulate else "None"
-
 
     def bus(self):
         """Return device hardware ID information."""
         # May require firmware support. Currently not feasible with PySerial
         return self.hwid
 
-
     def features(self):
         """Check features of serial device. Not yet implemented."""
         return 1
-
 
     def read_buffer(self, duration: float):
         """
@@ -98,7 +92,6 @@ class SerialDevice:
         print("Read complete!")
         return data
 
-
     def write_buffer(self, message):
         """
         Write provided (assumed already serialized) protobuf message to buffer.
@@ -117,14 +110,12 @@ class SerialDevice:
         print(message)
         return True
 
-
     def write_raw(self, message):
         """Write message ignoring protobuf structure and safety checks."""
         self.ser.write(message)
         self.ser.flush()
         print(message)
         return True
-
 
     def disconnect(self):
         """Disconnect serial device."""
@@ -142,7 +133,7 @@ class SerialDevice:
             self.ser.close()
             print("Serial connection closed.")
 
-# INJECTIONS
+    # INJECTIONS
 
     def byte_drop(
         self,
@@ -166,7 +157,6 @@ class SerialDevice:
         message.byte_drop.payload = payload
 
         return message.SerializeToString()
-
 
     def bit_flip(
         self,
@@ -193,7 +183,6 @@ class SerialDevice:
 
         return message.SerializeToString()
 
-
     def phantom_byte(
         self,
         seq_id=1,
@@ -219,7 +208,7 @@ class SerialDevice:
 
         return message.SerializeToString()
 
-# HELPERS
+    # HELPERS
 
     def log_entry(self, data):
         """
@@ -236,7 +225,6 @@ class SerialDevice:
             ascii_data = data.decode("utf-8", "ignore").strip()
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         return [timestamp, len(data), hex_data, ascii_data, data, data_type]
-
 
     def serial_data_type(self, raw_bytes):
         """
@@ -256,7 +244,6 @@ class SerialDevice:
                 return type(msg)
         return type(raw_bytes)
 
-
     def try_parse_ack(self, raw_bytes):
         """
         Attempt to parse given message as a DsiAck.
@@ -268,7 +255,6 @@ class SerialDevice:
             return msg
         except DecodeError:
             return None
-
 
     def try_parse_report(self, raw_bytes):
         """
@@ -282,7 +268,6 @@ class SerialDevice:
         except DecodeError:
             return None
 
-
     def try_parse_command(self, raw_bytes):
         """
         Attempt to parse given message as a DsiCommand.
@@ -294,7 +279,6 @@ class SerialDevice:
             return msg
         except DecodeError:
             return None
-
 
     def _fake_rows(self, duration: float):
         """Generate simulated log entries for hardwareless testing."""
@@ -315,7 +299,6 @@ class SerialDevice:
             time.sleep(0.25)
         print("Read complete! (simulated)")
         return data
-
 
     def handshake(self, timeout):
         """Identify and acknowledge device type."""

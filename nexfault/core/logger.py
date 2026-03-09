@@ -33,6 +33,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 security = HTTPBasic()
 
+
 class LogEntry(Base):
     __tablename__ = "logs"
 
@@ -47,6 +48,7 @@ class LogEntry(Base):
     ascii_data = Column(String)
     data_type = Column(String)
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -55,9 +57,11 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     logs = relationship("LogEntry", back_populates="owner")
 
+
 Base.metadata.create_all(engine)
 
 # ----------------------------- AUTH HELPERS ----------------------------------
+
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password using bcrypt."""
@@ -73,7 +77,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     hashed_bytes = hashed_password.encode("utf-8")
     return bcrypt.checkpw(password_bytes, hashed_bytes)
 
+
 # ----------------------------- DB / API HELPERS ------------------------------
+
 
 def get_db():
     """Yield a database session and ensure it is closed after use."""
@@ -98,9 +104,11 @@ def get_current_user(
         )
     return user
 
+
 # --------------------------------- API --------------------------------------
 
 app = FastAPI(title="LogParser")
+
 
 @app.post("/users/register")
 def register_user(username: str, password: str, db: Session = Depends(get_db)):
@@ -157,19 +165,23 @@ def get_logs_for_test(
         b64_data = None
         if entry.raw_data:
             b64_data = base64.b64encode(entry.raw_data).decode("utf-8")
-        output.append({
-            "id": entry.id,
-            "test_name": entry.test_name,
-            "log_timestamp": entry.log_timestamp,
-            "created_at": entry.created_at,
-            "raw_data": b64_data,
-            "hex_data": entry.hex_data,
-            "ascii_data": entry.ascii_data,
-            "data_type": entry.data_type,
-        })
+        output.append(
+            {
+                "id": entry.id,
+                "test_name": entry.test_name,
+                "log_timestamp": entry.log_timestamp,
+                "created_at": entry.created_at,
+                "raw_data": b64_data,
+                "hex_data": entry.hex_data,
+                "ascii_data": entry.ascii_data,
+                "data_type": entry.data_type,
+            }
+        )
     return output
 
+
 # ------------------------------ LOG FILE ------------------------------------
+
 
 class LogFile:
     """Internal log file creation and manipulation logic."""
@@ -182,7 +194,6 @@ class LogFile:
         self.name = name
         self.username = username
         Path(LOG_DIR).mkdir(exist_ok=True)  # try statement?
-
 
     def log_csv(self, headers: list[str], rows: list[list[str]]):
         """Save all logs (provided in nested array form) in .csv format."""
@@ -198,7 +209,6 @@ class LogFile:
 
         return filepath
 
-
     def sanitize_json(self, data):
         """
         Convert all bytes to strings to prevent JSON errors.
@@ -211,7 +221,6 @@ class LogFile:
         else:
             return data
 
-
     def log_json(self, params: list[str], data: list[list[str]]):
         """Save all logs (provided in nested array form) in .json format."""
         if len(params) != len(data[0]):
@@ -223,8 +232,7 @@ class LogFile:
 
         sanitized_data = self.sanitize_json(data)
         decoded_data = [
-            {params[i]: value for i, value in enumerate(row)}
-            for row in sanitized_data
+            {params[i]: value for i, value in enumerate(row)} for row in sanitized_data
         ]
 
         # Hardcoded string cleanup. Necessary for JSON implementation.
@@ -248,14 +256,12 @@ class LogFile:
 
         return filepath
 
-
     def _get_owner_id(self, session: Session) -> int:
         """Retrieve the owner ID for the current username."""
         user = session.query(User).filter(User.username == self.username).first()
         if not user:
             raise ValueError(f"No user found with username '{self.username}'.")
         return user.id
-
 
     def log_db(self, params: list[str], data: list[list[str]]):
         """
@@ -318,7 +324,6 @@ class LogFile:
         finally:
             session.close()
 
-
     def retrieve_logs(self, testname: str):
         """Search the database for any entries with the specified test name."""
         session = SessionLocal()
@@ -349,7 +354,6 @@ class LogFile:
             return []
         finally:
             session.close()
-
 
     def retrieve_tests(self):
         """Return all unique test names."""

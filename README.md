@@ -33,6 +33,17 @@ The setup process will:
 
 ---
 
+## Development Setup
+
+Install dependencies and set up pre-commit hooks for linting and CI/CD:
+
+```bash
+pip install -r requirements-dev.txt
+pre-commit install
+```
+
+---
+
 ## Running the Application
 
 ### Run both serial monitors (recommended)

@@ -7,16 +7,19 @@ from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
 DSI_PORT = "COM3"
 DSI_BAUD = 9600
 
+
 def monitor_dsi(ser, stop_event):
     while not stop_event.is_set():
         if ser.in_waiting:
-            line = ser.readline().decode('utf-8', errors='ignore').strip()
+            line = ser.readline().decode("utf-8", errors="ignore").strip()
             if line:
                 print(f"[DSI] {line}")
 
+
 def send(ser, cmd):
     payload = cmd.SerializeToString()
-    ser.write(struct.pack('<H', len(payload)) + payload)
+    ser.write(struct.pack("<H", len(payload)) + payload)
+
 
 def run():
     time.sleep(5)
@@ -34,7 +37,7 @@ def run():
     cmd.transport = uart_data_pb2.TRANSPORT_MODBUS
     cmd.inj_type = uart_data_pb2.INJ_UNSPECIFIED
     cmd.sensor_value = sensor_value
-    cmd.duration_ms = 0;
+    cmd.duration_ms = 0
     send(ser, cmd)
     time.sleep(5)
 
@@ -45,10 +48,10 @@ def run():
     cmd.sensor_value = sensor_value
     cmd.bit_flip.mode = uart_data_pb2.BITFLIP_RANDOM
     cmd.bit_flip.bits_drop = 5
-    #cmd.bit_flip.every_n_p = 2
+    # cmd.bit_flip.every_n_p = 2
     cmd.duration_ms = 10000
     send(ser, cmd)
-    time.sleep(cmd.duration_ms*2/1000)
+    time.sleep(cmd.duration_ms * 2 / 1000)
 
     print("\n=== TEST 3: ByteDrop 1 byte ===")
     cmd = uart_data_pb2.DsiCommand()
@@ -77,17 +80,18 @@ def run():
     cmd.transport = uart_data_pb2.TRANSPORT_MODBUS
     cmd.inj_type = uart_data_pb2.INJ_PHANTOM_BYTE
     cmd.sensor_value = sensor_value
-    cmd.duration_ms = 0 # Single shot
+    cmd.duration_ms = 0  # Single shot
     # We insert 0xAB after the 1st byte of the 'Value' field
     cmd.phantom_byte.mode = uart_data_pb2.PHANTOM_MANUAL
-    cmd.phantom_byte.byte_value = 0xAB 
-    cmd.phantom_byte.offset = 1 
+    cmd.phantom_byte.byte_value = 0xAB
+    cmd.phantom_byte.offset = 1
     send(ser, cmd)
     time.sleep(5)
 
     print("\n=== DONE ===")
     stop_event.set()
     ser.close()
+
 
 if __name__ == "__main__":
     run()
