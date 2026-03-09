@@ -16,7 +16,6 @@ PASSWORD = "password"
 def main():
 
     # ---------- login test ------------------------------
-
     db = SessionLocal()
     user = db.query(User).filter(User.username == USERNAME).first()
     

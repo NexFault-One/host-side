@@ -2,41 +2,40 @@ import serial
 import random
 import time
 import os
+import struct
 from datetime import datetime
 from serial.tools import list_ports
 from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
 from google.protobuf.message import DecodeError
-import struct
 
 # serial device connection, data read and write logic
 class SerialDevice:
+    """Serial device connection, data read and write logic."""
 
     def __init__(self, port: str, baud: int):
         """
-        Initializes serial device with given serial port and baud rate. Collects device description and information.
+        Initialize serial device with given serial port and baud rate.
+        Collects device description and information.
         """
-
         self.port = port
         self.baud = baud
         self.timeout = 0.1
         self.ser = None
 
-        self._simulate = (str(port).upper() == "FAKE") # For hardwareless integration testing
+        self._simulate = str(port).upper() == "FAKE"
 
         for port in list_ports.comports():
             if port.device == self.port:
                 self.description = port.description
                 self.hwid = port.hwid
-        
+
         if self._simulate:
             self.description = "Fake Serial (simulated)"
             self.hwid = "SIM-FAKE-PORT"
 
-    def connect(self):
-        """
-        Attempt connection to serial port.
-        """
 
+    def connect(self):
+        """Attempt connection to serial port."""
         try:
             print(f"Attempting connection to {self.port} with baud {self.baud}")
             if self._simulate:
@@ -44,56 +43,51 @@ class SerialDevice:
                 print("Connection successful! (simulated)")
                 return
             self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
-            print(f"Connection successful!")
+            print("Connection successful!")
             self.handshake(5)
         except (OSError, serial.SerialException) as e:
             print("Error opening serial port: ", e)
             self.ser = None
 
+
     def is_connected(self) -> bool:
-        """
-        Verify connection to serial port.
-        """
+        """Verify connection to serial port."""
+        return (self._simulate and self.ser is not None) or (
+            self.ser is not None and self.ser.is_open
+        )
 
-        return (self._simulate and self.ser is not None) or (self.ser is not None and self.ser.is_open)
-    
+
     def fw_ver(self):
-        """
-        Gets device firmware version.
-        """
-
+        """Get device firmware version."""
         # Must be implemented firmware side
         return "sim-0.1" if self._simulate else "None"
-    
-    def bus(self):
-        """
-        Returns device hardware ID information.
-        """
 
+
+    def bus(self):
+        """Return device hardware ID information."""
         # May require firmware support. Currently not feasible with PySerial
         return self.hwid
     
-    def features(self):
-        """
-        Checks features of serial device. Not yet implemented.
-        """
 
+    def features(self):
+        """Check features of serial device. Not yet implemented."""
         return 1
     
+
     def read_buffer(self, duration: float):
         """
-        Collect data from the device's buffer and save to an array. Includes timestamp for logging purposes.
+        Collect data from the device's buffer and save to an array.
+        Includes timestamp for logging purposes.
         """
-        # must include interrupt / synchronization to prevent incomplete read.
-
+        # Must include interrupt / synchronization to prevent incomplete read.
         if not self.is_connected():
             print("Serial device is not connected.")
             return []
-        
+
         if self._simulate:
             return self._fake_rows(duration)
 
-        print (f"Reading data on {self.port} for {duration}s")
+        print(f"Reading data on {self.port} for {duration}s")
         end_time = time.time() + duration
         data = []
         while time.time() < end_time:
@@ -104,17 +98,18 @@ class SerialDevice:
         print("Read complete!")
         return data
     
+
     def write_buffer(self, message):
         """
-        Writes provided (assumed already serialized) protobuf message to buffer, returns write success (true/false)
+        Write provided (assumed already serialized) protobuf message to buffer.
+        Returns write success (True/False).
         """
-
-        if (not self.is_connected()):
-            print ("Serial buffer not initialized.")
+        if not self.is_connected():
+            print("Serial buffer not initialized.")
             return False
-        
-        if (self.try_parse_command(message) == None):
-            print ("provided message is invalid, cannot be written.")
+
+        if self.try_parse_command(message) is None:
+            print("Provided message is invalid, cannot be written.")
             return False
 
         self.ser.write(message)
@@ -122,26 +117,22 @@ class SerialDevice:
         print(message)
         return True
     
+
     def write_raw(self, message):
-        """
-        Writes message ignoring protobuf structure and safety checks
-        """
+        """Write message ignoring protobuf structure and safety checks."""
         self.ser.write(message)
         self.ser.flush()
         print(message)
         return True
    
+
     def disconnect(self):
-        """
-        Disconnects serial device.
-        """
-        # Simulated port
+        """Disconnect serial device."""
         if getattr(self, "_simulate", False):
             self.ser = None
             print("Disconnected (simulated)")
             return
 
-        # Real port
         try:
             if self.ser and getattr(self.ser, "is_open", False):
                 self.ser.close()
@@ -153,11 +144,16 @@ class SerialDevice:
 
 # ------------------------------------------- INJECTIONS ----------------------------------------------
 
-    def byte_drop(self, seq_id = 1, start_offset = 0, length = 1, payload = "default", transport = uart_data_pb2.TransportType.TRANSPORT_UART, duration = 0):
-        """
-        Helper for byte drop injection
-        """
-
+    def byte_drop(
+        self,
+        seq_id=1,
+        start_offset=0,
+        length=1,
+        payload="default",
+        transport=uart_data_pb2.TransportType.TRANSPORT_UART,
+        duration=0,
+    ):
+        """Helper for byte drop injection."""
         message = uart_data_pb2.DsiCommand()
         message.proto_version = 1
         message.id = seq_id
@@ -169,19 +165,20 @@ class SerialDevice:
         message.byte_drop.length = length
         message.byte_drop.payload = payload
 
-        data = message.SerializeToString()
-
-        # if getattr(self, "_simulate", False): #simulate value
-        #     print (f"[SIM TX] {frame.hex(' ')}")
-        #     return 
-
-        return data
+        return message.SerializeToString()
     
-    def bit_flip(self, seq_id = 1, every_n_p = 2, bits_drop = 1, payload = "default", bit_flip_mode = uart_data_pb2.BitFlipMode.BITFLIP_RANDOM, transport = uart_data_pb2.TransportType.TRANSPORT_UART, duration = 0):
-        """
-        Helper for bit flip injection
-        """
 
+    def bit_flip(
+        self,
+        seq_id=1,
+        every_n_p=2,
+        bits_drop=1,
+        payload="default",
+        bit_flip_mode=uart_data_pb2.BitFlipMode.BITFLIP_RANDOM,
+        transport=uart_data_pb2.TransportType.TRANSPORT_UART,
+        duration=0,
+    ):
+        """Helper for bit flip injection."""
         message = uart_data_pb2.DsiCommand()
         message.proto_version = 1
         message.id = seq_id
@@ -194,19 +191,20 @@ class SerialDevice:
         message.bit_flip.payload = payload
         message.bit_flip.mode = bit_flip_mode
 
-        data = message.SerializeToString()
-
-        # if getattr(self, "_simulate", False): #simulate value
-        #     print (f"[SIM TX] {frame.hex(' ')}")
-        #     return 
-
-        return data
+        return message.SerializeToString()
     
-    def phantom_byte(self, seq_id = 1, offset = 0, byte_value = 0, payload = "default", phantom_byte_mode = uart_data_pb2.PhantomByteMode.PHANTOM_RANDOM, transport = uart_data_pb2.TransportType.TRANSPORT_UART, duration = 0):
-        """
-        Helper for phantom byte injection
-        """
 
+    def phantom_byte(
+        self,
+        seq_id=1,
+        offset=0,
+        byte_value=0,
+        payload="default",
+        phantom_byte_mode=uart_data_pb2.PhantomByteMode.PHANTOM_RANDOM,
+        transport=uart_data_pb2.TransportType.TRANSPORT_UART,
+        duration=0,
+    ):
+        """Helper for phantom byte injection."""
         message = uart_data_pb2.DsiCommand()
         message.proto_version = 1
         message.id = seq_id
@@ -219,21 +217,16 @@ class SerialDevice:
         message.phantom_byte.payload = payload
         message.phantom_byte.mode = phantom_byte_mode
 
-        data = message.SerializeToString()
-
-        # if getattr(self, "_simulate", False): #simulate value
-        #     print (f"[SIM TX] {frame.hex(' ')}")
-        #     return 
-
-        return data
+        return message.SerializeToString()
             
 # ---------------------------------------------- HELPERS ----------------------------------------------
 
     def log_entry(self, data):
         """
-        creates formatted entry with given bytes that can be inserted into read arrays.
+        Create a formatted entry with given bytes that can be inserted
+        into read arrays.
         """
-        # must be updated along with read_buffer function
+        # Must be updated along with read_buffer function
         data_type = self.serial_data_type(data)
         if data_type.__module__ == "uart_data_pb2":
             hex_data = hex(0)
@@ -242,24 +235,28 @@ class SerialDevice:
             hex_data = data.hex(" ")
             ascii_data = data.decode("utf-8", "ignore").strip()
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        entry = [timestamp, len(data), hex_data, ascii_data, data, self.serial_data_type(data)]
-        return entry
+        return [timestamp, len(data), hex_data, ascii_data, data, data_type]
     
-    def serial_data_type(self, bytes):
+
+    def serial_data_type(self, raw_bytes):
         """
-        Checks if given data is a protobuf message. Takes bytes from serial, attempts parse and identification of data type. returns protobuf object type or bytes.
+        Check if given data is a protobuf message. Takes bytes from serial,
+        attempts parse and identification of data type.
+        Returns protobuf object type or bytes.
         """
-        # strictly returns message type for debug / analysis. does not handle receiving live ack from firmware.
-        for parsed in (self.try_parse_ack, self.try_parse_report, self.try_parse_command):
-            msg = parsed(bytes)
+        # Strictly returns message type for debug / analysis.
+        # Does not handle receiving live ack from firmware.
+        for parser in (self.try_parse_ack, self.try_parse_report, self.try_parse_command):
+            msg = parser(raw_bytes)
             if msg is not None:
                 return type(msg)
-        return type(bytes)
+        return type(raw_bytes)
 
-    # need to ensure that each method is isolated to its targeted object type (DsiAck objects should not be able to parse as TmiReport or DsiCommand)
+
     def try_parse_ack(self, raw_bytes):
         """
-        Attempts to parse given message as a DsiAck. Returns decoded message if successful, None if failure
+        Attempt to parse given message as a DsiAck.
+        Returns decoded message if successful, None if failure.
         """
         msg = uart_data_pb2.DsiAck()
         try:
@@ -267,10 +264,12 @@ class SerialDevice:
             return msg
         except DecodeError:
             return None
-    
+
+
     def try_parse_report(self, raw_bytes):
         """
-        Attempts to parse given message as a TmiReport. Returns decoded message if successful, None if failure
+        Attempt to parse given message as a TmiReport.
+        Returns decoded message if successful, None if failure.
         """
         msg = uart_data_pb2.TmiReport()
         try:
@@ -278,10 +277,12 @@ class SerialDevice:
             return msg
         except DecodeError:
             return None
-    
+
+
     def try_parse_command(self, raw_bytes):
         """
-        Attempts to parse given message as a DsiCommand. Returns decoded message if successful, None if failure
+        Attempt to parse given message as a DsiCommand.
+        Returns decoded message if successful, None if failure.
         """
         msg = uart_data_pb2.DsiCommand()
         try:
@@ -290,16 +291,15 @@ class SerialDevice:
         except DecodeError:
             return None
     
+
     def _fake_rows(self, duration: float):
-        import time
-        from datetime import datetime
+        """Generate simulated log entries for hardwareless testing."""
         data = []
         end_time = time.time() + duration
         t0 = time.time()
         while time.time() < end_time:
             prog = ((time.time() - t0) % 10) / 10.0
             line = f"PROG:{prog:.2f}\r\n".encode("ascii")
-            # A small binary packet (Modbus-like)
             pkt = bytes([0x01, 0x03, 0x00, 0x10, 0x00, 0x02, 0xC4, 0x0B])
 
             for chunk in (line, pkt):
@@ -312,8 +312,9 @@ class SerialDevice:
         print("Read complete! (simulated)")
         return data
     
+
     def handshake(self, timeout):
-        # identify and acknowledge device type.
+        """Identify and acknowledge device type."""
         start_time = time.time()
         while time.time() - start_time < timeout:
             if self.ser.in_waiting > 0:
@@ -323,7 +324,6 @@ class SerialDevice:
                     self.write_raw(b"<ACK:DSI>")
                     time.sleep(1)
                     return True
-                
                 elif "UUT" in message:
                     print("UUT found")
                     self.write_raw(b"<ACK:UUT>")
