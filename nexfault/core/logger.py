@@ -1,19 +1,24 @@
 import base64
 import csv
 import json
+import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import bcrypt
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from pydantic import BaseModel
 from sqlalchemy import (
+    JSON,
     Column,
     DateTime,
     ForeignKey,
     Integer,
     LargeBinary,
     String,
+    Text,
     create_engine,
 )
 from sqlalchemy.orm import (
@@ -22,6 +27,45 @@ from sqlalchemy.orm import (
     relationship,
     sessionmaker,
 )
+from sqlalchemy.sql import func
+
+# PROFILE SCHEMAS
+
+
+class ProfileCreate(BaseModel):
+    name: str
+    description: str | None = None
+    transport: str | None = None
+    injection_type: str | None = None
+    duration_ms: int | None = None
+    params: dict[str, Any] | None = None
+    modbus_config: dict[str, Any] | None = None
+
+
+class ProfileUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    transport: str | None = None
+    injection_type: str | None = None
+    duration_ms: int | None = None
+    params: dict[str, Any] | None = None
+    modbus_config: dict[str, Any] | None = None
+
+
+class ProfileResponse(BaseModel):
+    profile_id: str
+    name: str
+    description: str | None
+    transport: str | None
+    injection_type: str | None
+    duration_ms: int | None
+    params: dict[str, Any] | None
+    modbus_config: dict[str, Any] | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
 
 # DB setup (local file path). Change connection information here.
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -56,6 +100,26 @@ class User(Base):
     username = Column(String, unique=True, nullable=False, index=True)
     hashed_password = Column(String, nullable=False)
     logs = relationship("LogEntry", back_populates="owner")
+    profiles = relationship("Profile", back_populates="owner")
+
+
+class Profile(Base):
+    __tablename__ = "profiles"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    owner = relationship("User", back_populates="profiles")
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    transport = Column(String, nullable=True)
+    injection_type = Column(String, nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+    params = Column(JSON, nullable=True)
+    modbus_config = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 Base.metadata.create_all(engine)
@@ -105,6 +169,17 @@ def get_current_user(
     return user
 
 
+def get_profile_or_404(profile_id: str, user_id: int, db: Session) -> Profile:
+    profile = (
+        db.query(Profile)
+        .filter(Profile.id == profile_id, Profile.owner_id == user_id)
+        .first()
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Profile {profile_id} not found.")
+    return profile
+
+
 # --------------------------------- API --------------------------------------
 
 app = FastAPI(title="LogParser")
@@ -123,6 +198,122 @@ def register_user(username: str, password: str, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     return {"message": "User created successfully."}
+
+
+@app.get("/profiles", response_model=list[ProfileResponse])
+def list_profiles(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return all profiles for the current user."""
+    profiles = db.query(Profile).filter(Profile.owner_id == current_user.id).all()
+    return [
+        ProfileResponse(
+            profile_id=p.id,
+            name=p.name,
+            description=p.description,
+            transport=p.transport,
+            injection_type=p.injection_type,
+            duration_ms=p.duration_ms,
+            params=p.params,
+            modbus_config=p.modbus_config,
+            created_at=p.created_at,
+            updated_at=p.updated_at,
+        )
+        for p in profiles
+    ]
+
+
+@app.post("/profiles", response_model=ProfileResponse, status_code=201)
+def create_profile(
+    body: ProfileCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a new profile for the current user."""
+    profile = Profile(
+        owner_id=current_user.id,
+        **body.model_dump(),
+    )
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return ProfileResponse(
+        profile_id=profile.id,
+        name=profile.name,
+        description=profile.description,
+        transport=profile.transport,
+        injection_type=profile.injection_type,
+        duration_ms=profile.duration_ms,
+        params=profile.params,
+        modbus_config=profile.modbus_config,
+        created_at=profile.created_at,
+        updated_at=profile.updated_at,
+    )
+
+
+@app.get("/profiles/{profile_id}", response_model=ProfileResponse)
+def get_profile(
+    profile_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Fetch a single profile by ID."""
+    profile = get_profile_or_404(profile_id, current_user.id, db)
+    return ProfileResponse(
+        profile_id=profile.id,
+        name=profile.name,
+        description=profile.description,
+        transport=profile.transport,
+        injection_type=profile.injection_type,
+        duration_ms=profile.duration_ms,
+        params=profile.params,
+        modbus_config=profile.modbus_config,
+        created_at=profile.created_at,
+        updated_at=profile.updated_at,
+    )
+
+
+@app.put("/profiles/{profile_id}", response_model=ProfileResponse)
+def update_profile(
+    profile_id: str,
+    body: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update an existing profile. Only provided fields are changed."""
+    profile = get_profile_or_404(profile_id, current_user.id, db)
+
+    updates = body.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(profile, field, value)
+
+    db.commit()
+    db.refresh(profile)
+    return ProfileResponse(
+        profile_id=profile.id,
+        name=profile.name,
+        description=profile.description,
+        transport=profile.transport,
+        injection_type=profile.injection_type,
+        duration_ms=profile.duration_ms,
+        params=profile.params,
+        modbus_config=profile.modbus_config,
+        created_at=profile.created_at,
+        updated_at=profile.updated_at,
+    )
+
+
+@app.delete("/profiles/{profile_id}", status_code=204)
+def delete_profile(
+    profile_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a profile by ID."""
+    profile = get_profile_or_404(profile_id, current_user.id, db)
+    db.delete(profile)
+    db.commit()
 
 
 @app.get("/tests", response_model=list[str])
@@ -328,11 +519,12 @@ class LogFile:
         """Search the database for any entries with the specified test name."""
         session = SessionLocal()
         try:
+            owner_id = self._get_owner_id(session)
             results = (
                 session.query(LogEntry)
                 .filter(
                     LogEntry.test_name == testname,
-                    LogEntry.owner_id == self.owner_id,
+                    LogEntry.owner_id == owner_id,
                 )
                 .all()
             )
