@@ -1,5 +1,6 @@
 from . import logger
 from . import parser
+from .logger import SessionLocal, User, verify_password
 
 # main script intended to faciliate fast debug of backend code
 # TODO: edit information as nescessary for your serial device.
@@ -8,7 +9,25 @@ BAUD_RATE = 9600
 READ_DURATION = 3
 LOG_FILE_NAME = "test"
 
+# change for unique tests
+USERNAME = "test"
+PASSWORD = "password"
+
 def main():
+
+    # ---------- login test ------------------------------
+
+    db = SessionLocal()
+    user = db.query(User).filter(User.username == USERNAME).first()
+    
+    if not user or not verify_password(PASSWORD, user.hashed_password):
+        print(f"Login failed for user '{USERNAME}'. Check credentials or register first.")
+        db.close()
+        return
+    
+    owner_id = user.id
+    db.close()
+    print(f"Logged in as {USERNAME} (ID: {owner_id})")
 
     # ---------- create and initiate connection ----------
     testdevice = parser.SerialDevice(SERIAL_PORT, BAUD_RATE)
@@ -36,10 +55,11 @@ def main():
 
     # ---------- logging test ----------
     print ("attempting log test")
-    log = logger.LogFile(LOG_FILE_NAME)
-    log.log_csv(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
-    log.log_json(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
-    log.log_db(["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"], testdata)
+    log = logger.LogFile(LOG_FILE_NAME, owner_id=owner_id)
+    headers = ["Timestamp", "Length", "Data (Hex)", "Data (ASCII)", "Data (Raw)", "Data Type"]
+    log.log_csv(headers, testdata)
+    log.log_json(headers, testdata)
+    log.log_db(headers, testdata)
     print(log.retrieve_tests())
     print(log.retrieve_logs("test"))
     print ("main complete!")
