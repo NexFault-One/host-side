@@ -23,7 +23,6 @@ def main():
 
     # modules
     modules = [
-        "nexfault.gui.DSI_Serial_Monitor",
         "nexfault.gui.UUT_Serial_Monitor",
         "nexfault.gui.testbench",
     ]
