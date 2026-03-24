@@ -143,6 +143,9 @@ class SerialDevice:
         payload="default",
         transport=uart_data_pb2.TransportType.TRANSPORT_UART,
         duration=0,
+        burst_mode=False,
+        burst_count=0,
+        modbus_config=None,
     ):
         """Helper for byte drop injection."""
         message = uart_data_pb2.DsiCommand()
@@ -152,9 +155,15 @@ class SerialDevice:
         message.inj_type = uart_data_pb2.InjectionType.INJ_BYTE_DROP
         message.transport = transport
         message.duration_ms = duration
+        message.burst_mode = burst_mode
+        message.burst_count = burst_count
         message.byte_drop.start_offset = start_offset
         message.byte_drop.length = length
         message.byte_drop.payload = payload
+
+        is_modbus = transport == uart_data_pb2.TransportType.TRANSPORT_MODBUS
+        if is_modbus and modbus_config is not None:
+            message.modbus_config.CopyFrom(modbus_config)
 
         return message.SerializeToString()
 
@@ -167,6 +176,9 @@ class SerialDevice:
         bit_flip_mode=uart_data_pb2.BitFlipMode.BITFLIP_RANDOM,
         transport=uart_data_pb2.TransportType.TRANSPORT_UART,
         duration=0,
+        burst_mode=False,
+        burst_count=0,
+        modbus_config=None,
     ):
         """Helper for bit flip injection."""
         message = uart_data_pb2.DsiCommand()
@@ -176,10 +188,16 @@ class SerialDevice:
         message.inj_type = uart_data_pb2.InjectionType.INJ_BIT_FLIP
         message.transport = transport
         message.duration_ms = duration
+        message.burst_mode = burst_mode
+        message.burst_count = burst_count
         message.bit_flip.every_n_p = every_n_p
         message.bit_flip.bits_drop = bits_drop
         message.bit_flip.payload = payload
         message.bit_flip.mode = bit_flip_mode
+
+        is_modbus = transport == uart_data_pb2.TransportType.TRANSPORT_MODBUS
+        if is_modbus and modbus_config is not None:
+            message.modbus_config.CopyFrom(modbus_config)
 
         return message.SerializeToString()
 
@@ -192,6 +210,9 @@ class SerialDevice:
         phantom_byte_mode=uart_data_pb2.PhantomByteMode.PHANTOM_RANDOM,
         transport=uart_data_pb2.TransportType.TRANSPORT_UART,
         duration=0,
+        burst_mode=False,
+        burst_count=0,
+        modbus_config=None,
     ):
         """Helper for phantom byte injection."""
         message = uart_data_pb2.DsiCommand()
@@ -201,12 +222,38 @@ class SerialDevice:
         message.inj_type = uart_data_pb2.InjectionType.INJ_PHANTOM_BYTE
         message.transport = transport
         message.duration_ms = duration
+        message.burst_mode = burst_mode
+        message.burst_count = burst_count
         message.phantom_byte.offset = offset
         message.phantom_byte.byte_value = byte_value
         message.phantom_byte.payload = payload
         message.phantom_byte.mode = phantom_byte_mode
 
+        is_modbus = transport == uart_data_pb2.TransportType.TRANSPORT_MODBUS
+        if is_modbus and modbus_config is not None:
+            message.modbus_config.CopyFrom(modbus_config)
+
         return message.SerializeToString()
+
+    def stop_injection(self, seq_id=1):
+        """helper for command to stop injection"""
+        message = uart_data_pb2.DsiCommand()
+        message.proto_version = 1
+        message.id = seq_id
+        message.stop = True
+        return message.SerializeToString()
+
+    def _build_modbus_config(
+        self, slave_id, func_code, address, value, recalculate_crc
+    ):
+        """Helper to build modbus config"""
+        cfg = uart_data_pb2.ModbusConfig()
+        cfg.slave_id = slave_id
+        cfg.func_code = func_code
+        cfg.address = address
+        cfg.value = value
+        cfg.recalculate_crc = recalculate_crc
+        return cfg
 
     # HELPERS
 
@@ -226,59 +273,25 @@ class SerialDevice:
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         return [timestamp, len(data), hex_data, ascii_data, data, data_type]
 
-    def serial_data_type(self, raw_bytes):
-        """
-        Check if given data is a protobuf message. Takes bytes from serial,
-        attempts parse and identification of data type.
-        Returns protobuf object type or bytes.
-        """
-        # Strictly returns message type for debug / analysis.
-        # Does not handle receiving live ack from firmware.
-        for parser in (
-            self.try_parse_ack,
-            self.try_parse_report,
-            self.try_parse_command,
-        ):
-            msg = parser(raw_bytes)
-            if msg is not None:
-                return type(msg)
-        return type(raw_bytes)
+    def parse_envelope(self, raw_bytes):
+        """Parses protobuf envelope from firmware and returns the inside data"""
+        env = uart_data_pb2.Envelope()
 
-    def try_parse_ack(self, raw_bytes):
-        """
-        Attempt to parse given message as a DsiAck.
-        Returns decoded message if successful, None if failure.
-        """
-        msg = uart_data_pb2.DsiAck()
         try:
-            msg.ParseFromString(raw_bytes)
-            return msg
+            env.ParseFromString()
         except DecodeError:
             return None
 
-    def try_parse_report(self, raw_bytes):
-        """
-        Attempt to parse given message as a TmiReport.
-        Returns decoded message if successful, None if failure.
-        """
-        msg = uart_data_pb2.TmiReport()
-        try:
-            msg.ParseFromString(raw_bytes)
-            return msg
-        except DecodeError:
+        if env.TmiReport is not None:
+            message = env.report
+        elif env.DsiAck is not None:
+            message = env.dsi_ack
+        elif env.DsiCommand is not None:
+            message = env.dsi_command
+        else:
             return None
 
-    def try_parse_command(self, raw_bytes):
-        """
-        Attempt to parse given message as a DsiCommand.
-        Returns decoded message if successful, None if failure.
-        """
-        msg = uart_data_pb2.DsiCommand()
-        try:
-            msg.ParseFromString(raw_bytes)
-            return msg
-        except DecodeError:
-            return None
+        return message
 
     def _fake_rows(self, duration: float):
         """Generate simulated log entries for hardwareless testing."""
