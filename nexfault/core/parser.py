@@ -283,6 +283,7 @@ class SerialDevice:
             return None
 
         if env.TmiReport is not None:
+            # append timestamp and uuid here
             message = env.report
         elif env.DsiAck is not None:
             message = env.dsi_ack

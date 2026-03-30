@@ -1,5 +1,6 @@
 import base64
 import csv
+import io
 import json
 import uuid
 from datetime import datetime
@@ -8,6 +9,7 @@ from typing import Any
 
 import bcrypt
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 from sqlalchemy import (
@@ -369,6 +371,68 @@ def get_logs_for_test(
             }
         )
     return output
+
+
+@app.get("/tests/{test_name}/export")
+def export_logs(
+    test_name: str,
+    format: str = "json",  # "csv" or "json"
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export all log entries for a test run (in CSV/JSON)."""
+    results = (
+        db.query(LogEntry)
+        .filter(
+            LogEntry.test_name == test_name,
+            LogEntry.owner_id == current_user.id,
+        )
+        .all()
+    )
+    if not results:
+        raise HTTPException(status_code=404, detail=f"Test '{test_name}' not found.")
+
+    rows = [
+        {
+            "id": entry.id,
+            "test_name": entry.test_name,
+            "log_timestamp": entry.log_timestamp,
+            "created_at": str(entry.created_at),
+            "hex_data": entry.hex_data,
+            "ascii_data": entry.ascii_data,
+            "data_type": entry.data_type,
+            "raw_data": (
+                base64.b64encode(entry.raw_data).decode("utf-8")
+                if entry.raw_data
+                else None
+            ),
+        }
+        for entry in results
+    ]
+
+    filename = f"{test_name}_export"
+
+    if format == "json":
+        content = json.dumps(rows, indent=2)
+        return StreamingResponse(
+            io.BytesIO(content.encode("utf-8")),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.json"'},
+        )
+
+    elif format == "csv":
+        buffer = io.StringIO()
+        writer = csv.DictWrite(buffer, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+        return StreamingResponse(
+            io.BytesIO(buffer.getvalue().encode("utf-8")),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachnemt; filename="{filename}.csv"'},
+        )
+
+    else:
+        raise HTTPException(status_code=400, detail="format must be 'csv' or 'json'")
 
 
 # ------------------------------ LOG FILE ------------------------------------

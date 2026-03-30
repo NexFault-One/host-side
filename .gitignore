@@ -9,3 +9,4 @@ __pycache__/
 *.csv
 *.json
 .ruff_cache/
+CLAUDE.md
