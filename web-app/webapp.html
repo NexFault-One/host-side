@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexFault | Engineering Reliability</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide { animation: slideIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade { animation: fadeIn 0.2s ease-out forwards; }
+        body { background-color: #f1f5f9; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Added new icons for the modal (BarChart2, FileJson, FileSpreadsheet, Terminal, Download)
+        const { Cpu, Menu, X, Mail, Lock, Activity, ArrowRight, ArrowLeft, AlertCircle, CheckCircle, XCircle, Clock, Search, LogOut, FileText, Settings, Save, Plus, Trash2, BarChart2, FileJson, FileSpreadsheet, Terminal, Download } = {
+            Cpu: () => <i data-lucide="cpu" className="w-5 h-5"></i>,
+            Menu: () => <i data-lucide="menu" className="w-5 h-5"></i>,
+            X: () => <i data-lucide="x" className="w-5 h-5"></i>,
+            Mail: () => <i data-lucide="mail" className="w-4 h-4"></i>,
+            Lock: () => <i data-lucide="lock" className="w-4 h-4"></i>,
+            Activity: () => <i data-lucide="activity" className="w-5 h-5"></i>,
+            ArrowRight: () => <i data-lucide="arrow-right" className="w-4 h-4"></i>,
+            ArrowLeft: () => <i data-lucide="arrow-left" className="w-4 h-4"></i>,
+            AlertCircle: () => <i data-lucide="alert-circle" className="w-3 h-3"></i>,
+            CheckCircle: () => <i data-lucide="check-circle" className="w-4 h-4 text-teal-500"></i>,
+            XCircle: () => <i data-lucide="x-circle" className="w-4 h-4 text-red-500"></i>,
+            Clock: () => <i data-lucide="clock" className="w-4 h-4 text-slate-400"></i>,
+            Search: () => <i data-lucide="search" className="w-4 h-4"></i>,
+            LogOut: () => <i data-lucide="log-out" className="w-4 h-4"></i>,
+            FileText: () => <i data-lucide="file-text" className="w-4 h-4"></i>,
+            Settings: () => <i data-lucide="settings" className="w-4 h-4"></i>,
+            Save: () => <i data-lucide="save" className="w-4 h-4"></i>,
+            Plus: () => <i data-lucide="plus" className="w-4 h-4"></i>,
+            Trash2: () => <i data-lucide="trash-2" className="w-4 h-4"></i>,
+            BarChart2: () => <i data-lucide="bar-chart-2" className="w-4 h-4"></i>,
+            FileJson: () => <i data-lucide="file-json" className="w-6 h-6"></i>,
+            FileSpreadsheet: () => <i data-lucide="file-spreadsheet" className="w-6 h-6"></i>,
+            Terminal: () => <i data-lucide="terminal" className="w-4 h-4"></i>,
+            Download: () => <i data-lucide="download" className="w-4 h-4"></i>
+        };
+
+        const API_BASE_URL = 'http://127.0.0.1:8000';
+
+        // ==========================================
+        // RUN DETAILS MODAL (NEW)
+        // ==========================================
+        const RunDetailsModal = ({ run, onClose }) => {
+            const [activeTab, setActiveTab] = React.useState('dashboard');
+            
+            React.useEffect(() => { lucide.createIcons(); }, [activeTab]);
+
+            // Real functional download logic
+            const handleDownloadJSON = () => {
+                const dataStr = JSON.stringify(run, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${run.id}_export.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            const handleDownloadCSV = () => {
+                // Simple flat CSV converter for the mock data
+                const headers = Object.keys(run).join(',');
+                const values = Object.values(run).map(v => `"${v}"`).join(',');
+                const csvStr = `${headers}\n${values}`;
+                const blob = new Blob([csvStr], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${run.id}_export.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 z-[100] backdrop-blur-sm flex items-center justify-center p-4 md:p-8 animate-fade">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full h-[85vh] flex flex-col overflow-hidden animate-slide">
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-800 text-white shrink-0">
+                            <div className="flex items-center gap-3">
+                                <Activity className="text-teal-400" />
+                                <div>
+                                    <h2 className="text-lg font-bold tracking-tight">{run.profileName}</h2>
+                                    <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">Run ID: {run.id}</p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+                                <X />
+                            </button>
+                        </div>
+
+                        {/* Modal Tabs */}
+                        <div className="flex px-6 bg-slate-50 border-b border-slate-200 shrink-0">
+                            <button 
+                                onClick={() => setActiveTab('dashboard')}
+                                className={`px-4 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'dashboard' ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                            >
+                                <BarChart2 /> Dashboard View
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('export')}
+                                className={`px-4 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'export' ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                            >
+                                <Download /> Export Data
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div className="flex-1 overflow-y-auto bg-slate-100 p-6">
+                            
+                            {/* --- DASHBOARD TAB --- */}
+                            {activeTab === 'dashboard' && (
+                                <div className="space-y-6 animate-slide">
+                                    {/* Metrics Grid */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Verdict</div>
+                                            <div className={`text-lg font-black ${run.verdict === 'PASS' ? 'text-teal-600' : run.verdict === 'FAIL' ? 'text-red-600' : 'text-amber-600'}`}>
+                                                {run.verdict}
+                                            </div>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Duration</div>
+                                            <div className="text-lg font-black text-slate-800 font-mono">{run.duration}</div>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Transport</div>
+                                            <div className="text-lg font-black text-slate-800">{run.transport}</div>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Total Faults</div>
+                                            <div className="text-lg font-black text-slate-800 font-mono">{Math.floor(Math.random() * 500) + 12}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* System Logs Simulation */}
+                                    <div className="bg-slate-900 rounded-xl overflow-hidden shadow-lg border border-slate-800">
+                                        <div className="px-4 py-2 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest">
+                                                <Terminal /> Execution Logs
+                                            </div>
+                                            <div className="flex gap-1.5">
+                                                <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                                                <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                                                <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                                            </div>
+                                        </div>
+                                        <div className="p-4 font-mono text-xs text-slate-300 space-y-1 h-64 overflow-y-auto">
+                                            <div className="text-teal-400">[INFO] Initializing hardware interface... OK</div>
+                                            <div className="text-teal-400">[INFO] Loading profile: {run.profileName}</div>
+                                            <div className="text-slate-400">[TRACE] Establishing {run.transport} connection...</div>
+                                            <div className="text-teal-400">[INFO] Connection established.</div>
+                                            <div className="text-slate-400">[TRACE] Beginning {run.injectionType} injection sequence...</div>
+                                            <div className="text-slate-300">Targeting payload index 0x00... injected successfully.</div>
+                                            <div className="text-slate-300">Targeting payload index 0x04... injected successfully.</div>
+                                            {run.verdict === 'FAIL' && <div className="text-red-400">[ERROR] Watchdog timeout detected on target device.</div>}
+                                            {run.verdict === 'FAIL' && <div className="text-red-400">[ERROR] Handshake failed at sequence 44.</div>}
+                                            <div className="text-slate-400">[TRACE] Injection complete. Gathering telemetry...</div>
+                                            <div className="text-teal-400">[INFO] Test concluded in {run.duration}. Status: {run.status}.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* --- EXPORT TAB --- */}
+                            {activeTab === 'export' && (
+                                <div className="max-w-2xl mx-auto py-8 animate-slide">
+                                    <div className="text-center mb-10">
+                                        <h3 className="text-2xl font-black text-slate-800 mb-2">Export Telemetry</h3>
+                                        <p className="text-sm text-slate-500">Download the raw data and execution logs for offline analysis or documentation.</p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* JSON Export Card */}
+                                        <div className="bg-white border border-slate-200 rounded-2xl p-8 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow group">
+                                            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                                <FileJson />
+                                            </div>
+                                            <h4 className="font-bold text-slate-800 mb-1">JSON Payload</h4>
+                                            <p className="text-xs text-slate-500 mb-6">Complete nested data structure including metadata and raw parameter configurations.</p>
+                                            <button 
+                                                onClick={handleDownloadJSON}
+                                                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Download /> Download .json
+                                            </button>
+                                        </div>
+
+                                        {/* CSV Export Card */}
+                                        <div className="bg-white border border-slate-200 rounded-2xl p-8 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow group">
+                                            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                                <FileSpreadsheet />
+                                            </div>
+                                            <h4 className="font-bold text-slate-800 mb-1">CSV Spreadsheet</h4>
+                                            <p className="text-xs text-slate-500 mb-6">Flat data format optimized for Excel, Pandas, or external visualization tools.</p>
+                                            <button 
+                                                onClick={handleDownloadCSV}
+                                                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Download /> Download .csv
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // LOGIN COMPONENT
+        // ==========================================
+        const LoginPage = ({ onBack, onSuccess }) => {
+            const [formData, setFormData] = React.useState({ email: '', password: '' });
+            const [error, setError] = React.useState(null);
+
+            React.useEffect(() => { lucide.createIcons(); }, [error]);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError(null);
+                try {
+                    const response = await fetch(`${API_BASE_URL}/users/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const data = await response.json();
+                    if (response.ok) {
+                        onSuccess(data); 
+                    } else {
+                        setError(data.detail || "Login failed");
+                    }
+                } catch (err) {
+                    setError("Network error. Ensure backend is running.");
+                }
+            };
+
+            const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6 animate-slide">
+                    <div className="w-full max-w-xl bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden flex flex-col md:flex-row">
+                        <div className="bg-slate-800 md:w-48 p-8 text-white flex flex-col justify-between">
+                            <div className="flex items-center gap-2">
+                                <Activity className="text-teal-400" />
+                                <span className="font-bold tracking-tighter uppercase text-xs">NexFault</span>
+                            </div>
+                            <button onClick={onBack} className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-teal-400 transition-colors">
+                                <ArrowLeft /> Back
+                            </button>
+                        </div>
+
+                        <div className="flex-1 p-10 lg:p-14">
+                            <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Welcome Back</h2>
+                            <p className="text-slate-400 text-sm font-medium mb-10 italic">Access your injection profiles</p>
+                            
+                            {error && <div className="mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-xl font-bold flex items-center gap-2 border border-red-100"><AlertCircle/> {error}</div>}
+
+                            <form className="space-y-5" onSubmit={handleSubmit}>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Work Email</label>
+                                    <div className="flex items-center gap-3 p-3.5 bg-slate-50 border border-slate-200 focus-within:border-teal-500 rounded-xl transition-colors">
+                                        <Mail className="text-slate-400" />
+                                        <input name="email" value={formData.email} onChange={handleChange} required placeholder="name@domain.com" className="bg-transparent outline-none w-full text-sm" />
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Password</label>
+                                    <div className="flex items-center gap-3 p-3.5 bg-slate-50 border border-slate-200 focus-within:border-teal-500 rounded-xl transition-colors">
+                                        <Lock className="text-slate-400" />
+                                        <input name="password" type="password" value={formData.password} onChange={handleChange} required placeholder="••••••••" className="bg-transparent outline-none w-full text-sm" />
+                                    </div>
+                                </div>
+                                <button type="submit" className="w-full bg-teal-600 text-white py-4 rounded-2xl font-bold shadow-xl shadow-teal-900/10 hover:bg-teal-700 transition-all mt-4 flex items-center justify-center gap-2 group">
+                                    Access Terminal <ArrowRight className="group-hover:translate-x-1 transition-transform" />
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // SIGNUP COMPONENT
+        // ==========================================
+        const SignUpPage = ({ onBack, onSuccess }) => {
+            const [formData, setFormData] = React.useState({ firstName: '', lastName: '', email: '', password: '' });
+            const [error, setError] = React.useState(null);
+
+            React.useEffect(() => { lucide.createIcons(); }, [error]);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError(null);
+                
+                if (formData.password.length < 8) {
+                    setError("Password must be at least 8 characters");
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/users/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const data = await response.json();
+                    if (response.ok) {
+                        onSuccess(data);
+                    } else {
+                        setError(data.detail || "Registration failed");
+                    }
+                } catch (err) {
+                    setError("Network error. Ensure backend is running.");
+                }
+            };
+
+            const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6 animate-slide">
+                    <div className="w-full max-w-xl bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden flex flex-col md:flex-row">
+                        <div className="bg-slate-800 md:w-48 p-8 text-white flex flex-col justify-between">
+                            <div className="flex items-center gap-2">
+                                <Activity className="text-teal-400" />
+                                <span className="font-bold tracking-tighter uppercase text-xs">NexFault</span>
+                            </div>
+                            <button onClick={onBack} className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-teal-400 transition-colors">
+                                <ArrowLeft /> Back
+                            </button>
+                        </div>
+
+                        <div className="flex-1 p-10 lg:p-14">
+                            <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Create Profile</h2>
+                            <p className="text-slate-400 text-sm font-medium mb-10 italic">Initialize your engineering profile</p>
+                            
+                            {error && <div className="mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-xl font-bold flex items-center gap-2 border border-red-100"><AlertCircle/> {error}</div>}
+
+                            <form className="space-y-5" onSubmit={handleSubmit}>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">First Name</label>
+                                        <input name="firstName" required value={formData.firstName} onChange={handleChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" placeholder="John" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Last Name</label>
+                                        <input name="lastName" required value={formData.lastName} onChange={handleChange} className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" placeholder="Doe" />
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Work Email</label>
+                                    <div className="flex items-center gap-3 p-3.5 bg-slate-50 border border-slate-200 focus-within:border-teal-500 rounded-xl transition-colors">
+                                        <Mail className="text-slate-400" />
+                                        <input name="email" type="email" required value={formData.email} onChange={handleChange} placeholder="name@domain.com" className="bg-transparent outline-none w-full text-sm" />
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Password</label>
+                                    <div className="flex items-center gap-3 p-3.5 bg-slate-50 border border-slate-200 focus-within:border-teal-500 rounded-xl transition-colors">
+                                        <Lock className="text-slate-400" />
+                                        <input name="password" type="password" required value={formData.password} onChange={handleChange} placeholder="••••••••" className="bg-transparent outline-none w-full text-sm" />
+                                    </div>
+                                </div>
+                                <button type="submit" className="w-full bg-teal-600 text-white py-4 rounded-2xl font-bold shadow-xl shadow-teal-900/10 hover:bg-teal-700 transition-all mt-4 flex items-center justify-center gap-2 group">
+                                    Create Profile <ArrowRight className="group-hover:translate-x-1 transition-transform" />
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // DASHBOARD COMPONENT
+        // ==========================================
+        const Dashboard = ({ user, onLogout }) => {
+            const [activeTab, setActiveTab] = React.useState('history');
+            const [profileSearch, setProfileSearch] = React.useState(''); 
+            
+            // NEW: State for tracking which execution history row is selected
+            const [selectedRun, setSelectedRun] = React.useState(null);
+            
+            React.useEffect(() => { lucide.createIcons(); });
+
+            const mockResults = [
+                { id: 'run-001', profileName: 'UART Byte Drop Test', transport: 'UART', injectionType: 'BYTE_DROP', duration: '5023 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 9, 06:15 AM' },
+                { id: 'run-002', profileName: 'MODBUS CRC Flip', transport: 'MODBUS', injectionType: 'BIT_FLIP', duration: '3012 ms', status: 'Completed', verdict: 'FAIL', timestamp: 'Mar 9, 05:45 AM' },
+                { id: 'run-003', profileName: 'I2C Phantom Inject', transport: 'I2C', injectionType: 'PHANTOM_BYTE', duration: '2005 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 9, 04:30 AM' },
+                { id: 'run-004', profileName: 'MODBUS Slave Chaos', transport: 'MODBUS', injectionType: 'BIT_FLIP', duration: '10500 ms', status: 'Failed', verdict: 'INCONCLUSIVE', timestamp: 'Mar 8, 12:20 PM' },
+                { id: 'run-005', profileName: 'UART Byte Drop Test', transport: 'UART', injectionType: 'BYTE_DROP', duration: '5018 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 8, 10:00 AM' },
+                { id: 'run-006', profileName: 'UART Stress Test - Long', transport: 'UART', injectionType: 'BYTE_DROP', duration: '30245 ms', status: 'Completed', verdict: 'FAIL', timestamp: 'Mar 8, 07:30 AM' },
+                { id: 'run-007', profileName: 'I2C Address Confusion', transport: 'I2C', injectionType: 'PHANTOM_BYTE', duration: '4089 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 7, 10:45 AM' },
+                { id: 'run-008', profileName: 'MODBUS CRC Flip', transport: 'MODBUS', injectionType: 'BIT_FLIP', duration: '3008 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 7, 05:20 AM' },
+                { id: 'run-009', profileName: 'UART Dropped Frame', transport: 'UART', injectionType: 'BYTE_DROP', duration: '5020 ms', status: 'Failed', verdict: 'FAIL', timestamp: 'Mar 6, 02:15 PM' },
+                { id: 'run-010', profileName: 'I2C Clock Stretch', transport: 'I2C', injectionType: 'BIT_FLIP', duration: '8042 ms', status: 'Completed', verdict: 'INCONCLUSIVE', timestamp: 'Mar 6, 09:10 AM' }
+            ];
+
+            const [profiles, setProfiles] = React.useState([]);
+            const [editingId, setEditingId] = React.useState(null);
+
+            const PARAM_DEFAULTS = {
+                BIT_FLIP: { everyNPackets: '100', bitsToDrop: '1', mode: 'Random' },
+                BYTE_DROP: { startOffset: '0', length: '4' },
+                PHANTOM_BYTE: { offset: '0', byteValue: '0x00', mode: 'Inject' }
+            };
+
+            const [configForm, setConfigForm] = React.useState({
+                userId: user.id, profileName: '', description: '', transport: 'UART', injectionType: 'BIT_FLIP', duration: '5000', payload: '0xFF', injectionParams: PARAM_DEFAULTS['BIT_FLIP']
+            });
+
+            const fetchProfiles = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/profiles?user_id=${user.id}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setProfiles(data);
+                    }
+                } catch (error) {
+                    console.error("Network error fetching profiles:", error);
+                }
+            };
+
+            React.useEffect(() => {
+                if (activeTab === 'config') fetchProfiles();
+            }, [activeTab]);
+
+            React.useEffect(() => {
+                if (editingId !== null) {
+                    const profileToEdit = profiles.find(p => p.id === editingId);
+                    if (profileToEdit) {
+                        let parsedParams = PARAM_DEFAULTS[profileToEdit.injectionType] || {};
+                        try {
+                            if (profileToEdit.injectionParams) parsedParams = JSON.parse(profileToEdit.injectionParams);
+                        } catch (e) { console.error("Error parsing params", e); }
+                        
+                        setConfigForm({ ...profileToEdit, userId: user.id, injectionParams: parsedParams });
+                    }
+                } else {
+                    setConfigForm({
+                        userId: user.id, profileName: '', description: '', transport: 'UART', injectionType: 'BIT_FLIP', duration: '5000', payload: '0xFF', injectionParams: PARAM_DEFAULTS['BIT_FLIP']
+                    });
+                }
+            }, [editingId, profiles, user.id]);
+
+            const handleConfigChange = (e) => {
+                const { name, value } = e.target;
+                if (name === 'injectionType') {
+                    setConfigForm(prev => ({ ...prev, injectionType: value, injectionParams: PARAM_DEFAULTS[value] }));
+                } else {
+                    setConfigForm(prev => ({ ...prev, [name]: value }));
+                }
+            };
+
+            const handleParamChange = (e) => {
+                const { name, value } = e.target;
+                setConfigForm(prev => ({ ...prev, injectionParams: { ...prev.injectionParams, [name]: value } }));
+            };
+
+            const handleSaveProfile = async (e) => {
+                e.preventDefault();
+                const url = editingId ? `${API_BASE_URL}/profiles/${editingId}` : `${API_BASE_URL}/profiles`;
+                const method = editingId ? 'PUT' : 'POST';
+
+                const payloadToSend = { ...configForm, injectionParams: JSON.stringify(configForm.injectionParams) };
+
+                try {
+                    const response = await fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payloadToSend) 
+                    });
+
+                    if (response.ok) {
+                        await fetchProfiles(); 
+                        if (!editingId) {
+                            const newProfile = await response.json();
+                            if (newProfile.id) setEditingId(newProfile.id); 
+                        }
+                    } else {
+                        alert("Error saving profile.");
+                    }
+                } catch (error) {
+                    alert("Network error.");
+                }
+            };
+
+            const handleDeleteProfile = async (id, e) => {
+                e.stopPropagation();
+                if (!window.confirm("Are you sure you want to delete this profile?")) return;
+                try {
+                    const response = await fetch(`${API_BASE_URL}/profiles/${id}`, { method: 'DELETE' });
+                    if (response.ok) {
+                        if (editingId === id) setEditingId(null);
+                        await fetchProfiles();
+                    }
+                } catch (error) {
+                    console.error("Failed to delete profile:", error);
+                }
+            };
+
+            const filteredProfiles = profiles.filter(p => 
+                (p.profileName || '').toLowerCase().includes(profileSearch.toLowerCase()) || 
+                (p.description || '').toLowerCase().includes(profileSearch.toLowerCase())
+            );
+
+            return (
+                <div className="min-h-screen flex bg-slate-50 animate-slide">
+                    
+                    {/* Render the Modal if a run is selected */}
+                    {selectedRun && (
+                        <RunDetailsModal run={selectedRun} onClose={() => setSelectedRun(null)} />
+                    )}
+
+                    <aside className="w-64 bg-slate-800 text-slate-300 flex flex-col hidden md:flex shrink-0">
+                        <div className="p-6 flex items-center gap-2 border-b border-slate-700">
+                            <Activity className="text-teal-400" />
+                            <span className="font-bold tracking-tighter uppercase text-white">NexFault</span>
+                        </div>
+                        <div className="px-6 py-4 border-b border-slate-700">
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Operator</div>
+                            <div className="text-white text-sm font-medium truncate">{user.firstName} {user.lastName}</div>
+                        </div>
+                        <nav className="flex-1 p-4 space-y-2">
+                            <button onClick={() => setActiveTab('history')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'history' ? 'bg-teal-600/10 text-teal-400' : 'hover:bg-slate-700/50 hover:text-white'}`}><FileText /> Test History</button>
+                            <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'config' ? 'bg-teal-600/10 text-teal-400' : 'hover:bg-slate-700/50 hover:text-white'}`}><Settings /> Configurations</button>
+                        </nav>
+                        <div className="p-4 border-t border-slate-700">
+                            <button onClick={onLogout} className="flex items-center gap-3 w-full hover:bg-slate-700/50 hover:text-white px-4 py-3 rounded-xl font-medium transition-colors text-sm"><LogOut /> Sign Out</button>
+                        </div>
+                    </aside>
+
+                    <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+                        <header className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between z-10 shrink-0">
+                            <div>
+                                <h1 className="text-xl font-bold text-slate-800 tracking-tight">{activeTab === 'history' ? 'Recent Executions' : 'Profile Configuration'}</h1>
+                                <p className="text-xs text-slate-400 font-medium">{activeTab === 'history' ? 'Review past fault injection runs' : 'Create and manage injection profiles'}</p>
+                            </div>
+                        </header>
+
+                        <div className={`flex-1 overflow-hidden flex flex-col ${activeTab === 'history' ? 'p-8' : ''}`}>
+                            
+                            {activeTab === 'history' && (
+                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden animate-slide">
+                                    <div className="flex-1 overflow-y-auto">
+                                        <table className="w-full text-left border-collapse relative">
+                                            <thead className="sticky top-0 bg-slate-50 z-10 shadow-sm">
+                                                <tr className="border-b border-slate-200 text-[10px] uppercase tracking-widest text-slate-500 font-bold">
+                                                    <th className="px-6 py-4">Run ID</th>
+                                                    <th className="px-6 py-4">Profile Name</th>
+                                                    <th className="px-6 py-4">Transport</th>
+                                                    <th className="px-6 py-4">Injection Type</th>
+                                                    <th className="px-6 py-4">Duration</th>
+                                                    <th className="px-6 py-4">Status</th>
+                                                    <th className="px-6 py-4">Verdict</th>
+                                                    <th className="px-6 py-4 text-right">Timestamp</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-600">
+                                                {mockResults.map((result) => (
+                                                    <tr 
+                                                        key={result.id} 
+                                                        onClick={() => setSelectedRun(result)} // Opens the modal
+                                                        className="hover:bg-slate-50/50 transition-colors cursor-pointer group"
+                                                    >
+                                                        <td className="px-6 py-4 font-mono text-xs text-slate-400 group-hover:text-teal-600 transition-colors">{result.id}</td>
+                                                        <td className="px-6 py-4 font-bold text-slate-800">{result.profileName}</td>
+                                                        <td className="px-6 py-4">
+                                                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border border-slate-200">
+                                                                {result.transport}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border border-slate-200">
+                                                                {result.injectionType}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-slate-500 font-mono text-xs">{result.duration}</td>
+                                                        <td className={`px-6 py-4 ${result.status === 'Completed' ? 'text-teal-600 font-bold' : 'text-red-500 font-bold'}`}>
+                                                            {result.status}
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            {result.verdict === 'PASS' && <span className="bg-teal-100 text-teal-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">PASS</span>}
+                                                            {result.verdict === 'FAIL' && <span className="bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">FAIL</span>}
+                                                            {result.verdict === 'INCONCLUSIVE' && <span className="bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">INCONCLUSIVE</span>}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right text-slate-400 text-xs whitespace-nowrap">{result.timestamp}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'config' && (
+                                <div className="flex w-full h-full animate-slide">
+                                    <div className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0 z-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+                                        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Saved Profiles</h3>
+                                            <button onClick={() => setEditingId(null)} className="p-1.5 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors"><Plus /></button>
+                                        </div>
+                                        
+                                        <div className="p-3 border-b border-slate-100 bg-white">
+                                            <div className="relative">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Search profiles..." 
+                                                    value={profileSearch}
+                                                    onChange={(e) => setProfileSearch(e.target.value)}
+                                                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-teal-500 transition-all font-medium text-slate-600 placeholder:font-normal"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                                            {filteredProfiles.map(p => (
+                                                <div key={p.id} onClick={() => setEditingId(p.id)} className={`w-full text-left p-4 rounded-xl transition-all border cursor-pointer ${editingId === p.id ? 'bg-slate-800 border-slate-800 text-white shadow-lg shadow-slate-900/10' : 'bg-white border-slate-100 hover:border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <div className="font-bold text-sm truncate pr-2">{p.profileName || 'Unnamed Profile'}</div>
+                                                        <button onClick={(e) => handleDeleteProfile(p.id, e)} className={`p-1.5 -mr-1.5 -mt-1.5 rounded-md transition-colors ${editingId === p.id ? 'text-slate-400 hover:text-red-400 hover:bg-slate-700' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}><Trash2 /></button>
+                                                    </div>
+                                                    <div className={`text-xs line-clamp-2 leading-relaxed ${editingId === p.id ? 'text-slate-400' : 'text-slate-500'}`}>{p.description || 'No description provided.'}</div>
+                                                </div>
+                                            ))}
+                                            {filteredProfiles.length === 0 && (
+                                                <p className="text-xs text-slate-400 text-center py-6">No profiles found.</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto p-8 lg:p-12">
+                                        <div className="max-w-3xl mx-auto">
+                                            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden pb-6">
+                                                <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
+                                                    <h2 className="text-lg font-bold text-slate-800">{editingId ? 'Edit Profile' : 'New Profile'}</h2>
+                                                    <button onClick={handleSaveProfile} className="bg-teal-600 text-white px-5 py-2 rounded-lg text-xs font-bold shadow-lg shadow-teal-900/10 hover:bg-teal-700 transition-all flex items-center gap-2">
+                                                        <Save className="w-4 h-4" /> Save
+                                                    </button>
+                                                </div>
+                                                
+                                                <form className="p-8 space-y-6">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Profile Name</label>
+                                                        <input name="profileName" value={configForm.profileName} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium" />
+                                                    </div>
+                                                    
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Description</label>
+                                                        <textarea name="description" value={configForm.description} onChange={handleConfigChange} rows="2" className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm resize-none" />
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Transport</label>
+                                                            <select name="transport" value={configForm.transport} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
+                                                                <option value="UART">UART</option>
+                                                                <option value="Modbus">Modbus</option>
+                                                                <option value="I2C">I2C</option>
+                                                            </select>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Injection Type</label>
+                                                            <select name="injectionType" value={configForm.injectionType} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
+                                                                <option value="BIT_FLIP">BIT_FLIP</option>
+                                                                <option value="BYTE_DROP">BYTE_DROP</option>
+                                                                <option value="PHANTOM_BYTE">PHANTOM_BYTE</option>
+                                                            </select>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Duration (ms)</label>
+                                                            <input name="duration" value={configForm.duration} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
+                                                        </div>
+                                                    </div>
+
+                                                    <hr className="border-slate-100 my-8" />
+
+                                                    {/* Dynamic Parameters Based on Injection Type */}
+                                                    {configForm.injectionType === 'BIT_FLIP' && (
+                                                        <div>
+                                                            <h3 className="text-sm font-bold text-slate-800 mb-4">Bit Flip Parameters</h3>
+                                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Every N Packets</label>
+                                                                    <input name="everyNPackets" value={configForm.injectionParams.everyNPackets || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Bits to Drop</label>
+                                                                    <input name="bitsToDrop" value={configForm.injectionParams.bitsToDrop || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Payload</label>
+                                                                    <input name="payload" value={configForm.payload} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-mono" />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <select name="mode" value={configForm.injectionParams.mode || 'Random'} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
+                                                                        <option value="Random">Random</option>
+                                                                        <option value="Sequential">Sequential</option>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {configForm.injectionType === 'BYTE_DROP' && (
+                                                        <div>
+                                                            <h3 className="text-sm font-bold text-slate-800 mb-4">Byte Drop Parameters</h3>
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Start Offset</label>
+                                                                    <input name="startOffset" value={configForm.injectionParams.startOffset || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Length</label>
+                                                                    <input name="length" value={configForm.injectionParams.length || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Payload</label>
+                                                                    <input name="payload" value={configForm.payload} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-mono" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {configForm.injectionType === 'PHANTOM_BYTE' && (
+                                                        <div>
+                                                            <h3 className="text-sm font-bold text-slate-800 mb-4">Phantom Byte Parameters</h3>
+                                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Offset</label>
+                                                                    <input name="offset" value={configForm.injectionParams.offset || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Byte Value</label>
+                                                                    <input name="byteValue" value={configForm.injectionParams.byteValue || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-mono" />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Payload</label>
+                                                                    <input name="payload" value={configForm.payload} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-mono" />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <select name="mode" value={configForm.injectionParams.mode || 'Inject'} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
+                                                                        <option value="Inject">Inject</option>
+                                                                        <option value="Replace">Replace</option>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // LANDING PAGE
+        // ==========================================
+        const LandingPage = ({ onSignUp, onLogin }) => {
+            const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+            React.useEffect(() => { lucide.createIcons(); }, [isMenuOpen]);
+
+            return (
+                <div className="min-h-screen font-sans text-slate-700 animate-slide">
+                    <nav className="flex justify-between items-center px-10 py-5 bg-[#f1f5f9] border-b border-slate-200 sticky top-0 z-50">
+                        <div className="flex items-center gap-2.5 group">
+                            <div className="bg-slate-800 p-2 rounded-xl group-hover:bg-teal-600 transition-colors">
+                                <Activity className="text-white" />
+                            </div>
+                            <div className="text-slate-800 font-extrabold text-xl tracking-tighter uppercase">
+                                NEX<span className="text-teal-600">FAULT</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <button onClick={onLogin} className="hidden md:block text-slate-500 hover:text-slate-800 px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors">Log In</button>
+                            <button onClick={onSignUp} className="hidden md:block bg-slate-800 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-700 transition-all shadow-md">Create Profile</button>
+                            <div className="relative">
+                                <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="md:hidden p-2 text-slate-500 bg-white border border-slate-200 rounded-xl hover:text-teal-600 transition-all shadow-sm">
+                                    {isMenuOpen ? <X /> : <Menu />}
+                                </button>
+                                {isMenuOpen && (
+                                    <div className="absolute right-0 mt-4 w-64 bg-white border border-slate-100 rounded-2xl shadow-2xl z-[60] overflow-hidden">
+                                        <div className="py-2">
+                                            <div className="px-5 py-3 text-[10px] font-bold text-slate-300 uppercase tracking-widest border-b border-slate-50 mb-1">Options</div>
+                                            <button onClick={onLogin} className="w-full flex items-center gap-3 px-5 py-4 text-sm font-bold text-slate-600 hover:bg-slate-50 text-left"><Lock className="w-4 h-4" /> Log In</button>
+                                            <button onClick={onSignUp} className="w-full flex items-center gap-3 px-5 py-4 text-sm font-bold text-teal-600 hover:bg-teal-50 text-left"><Activity className="w-4 h-4" /> Create Profile</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </nav>
+
+                    <section className="py-24 px-10 max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-20 text-center lg:text-left">
+                        <div className="flex-1">
+                            <h1 className="text-6xl lg:text-8xl font-black mb-8 text-slate-800 tracking-tight leading-[0.9]">
+                                Reliability <br/><span className="text-slate-400">by design.</span>
+                            </h1>
+                            <p className="text-xl font-medium text-slate-500 mb-12 max-w-lg mx-auto lg:mx-0 leading-relaxed">
+                                NexFault provides advanced fault injection to guarantee firmware integrity in mission-critical environments.
+                            </p>
+                            <div className="flex items-center justify-center lg:justify-start gap-4">
+                                <button onClick={onSignUp} className="bg-teal-600 text-white px-8 py-5 rounded-2xl font-bold text-lg shadow-xl shadow-teal-900/10 hover:bg-teal-700 hover:-translate-y-1 transition-all flex items-center gap-3">
+                                    Create Profile <ArrowRight />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 hidden lg:flex justify-end">
+                            <div className="w-96 h-96 bg-white rounded-[3rem] shadow-[0_40px_80px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center justify-center rotate-2 scale-110">
+                                <div className="text-slate-100 scale-[6]"><Cpu /></div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // MAIN APP ORCHESTRATOR
+        // ==========================================
+        const App = () => {
+            const [view, setView] = React.useState('landing');
+            const [currentUser, setCurrentUser] = React.useState(null); 
+            
+            const handleAuthSuccess = (userData) => {
+                setCurrentUser(userData);
+                setView('dashboard');
+            };
+
+            const handleLogout = () => {
+                setCurrentUser(null);
+                setView('landing');
+            };
+
+            return (
+                <React.Fragment>
+                    {view === 'landing' && <LandingPage onSignUp={() => setView('signup')} onLogin={() => setView('login')} />}
+                    {view === 'login' && <LoginPage onBack={() => setView('landing')} onSuccess={handleAuthSuccess} />}
+                    {view === 'signup' && <SignUpPage onBack={() => setView('landing')} onSuccess={handleAuthSuccess} />}
+                    {view === 'dashboard' && currentUser && <Dashboard user={currentUser} onLogout={handleLogout} />}
+                </React.Fragment>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
