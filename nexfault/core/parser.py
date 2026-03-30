@@ -1,4 +1,5 @@
 import time
+import uuid
 from datetime import datetime
 
 import serial
@@ -278,16 +279,19 @@ class SerialDevice:
         env = uart_data_pb2.Envelope()
 
         try:
-            env.ParseFromString()
+            env.ParseFromString(raw_bytes)
         except DecodeError:
             return None
 
-        if env.TmiReport is not None:
-            # append timestamp and uuid here
-            message = env.report
-        elif env.DsiAck is not None:
+        if env.HasField("report"):
+            report = env.report
+            # Host-assigned ID and completion timestamp (time envelope was received)
+            report.id = uuid.uuid4().int & 0xFFFFFFFF
+            report.timestamp_ms = int(datetime.now().timestamp() * 1000)
+            message = report
+        elif env.HasField("dsi_ack"):
             message = env.dsi_ack
-        elif env.DsiCommand is not None:
+        elif env.HasField("dsi_command"):
             message = env.dsi_command
         else:
             return None
