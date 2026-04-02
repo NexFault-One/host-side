@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import create_engine, Column, String, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import uuid
@@ -89,9 +89,8 @@ class ProfileBase(BaseModel):
     duration: str
 
 class ProfileResponse(ProfileBase):
+    model_config = ConfigDict(from_attributes=True)
     id: str
-    class Config:
-        from_attributes = True
 
 # ---------------------------------------------------------
 # API ENDPOINTS

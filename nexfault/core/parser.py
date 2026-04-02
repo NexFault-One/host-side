@@ -263,12 +263,13 @@ class SerialDevice:
         Create a formatted entry with given bytes that can be inserted
         into read arrays.
         """
-        # Must be updated along with read_buffer function
-        data_type = self.serial_data_type(data)
-        if data_type.__module__ == "uart_data_pb2":
+        parsed = self.parse_envelope(data)
+        if parsed is not None:
+            data_type = type(parsed)
             hex_data = hex(0)
             ascii_data = f"Protobuf Message: {data_type.__name__}"
         else:
+            data_type = type(data)
             hex_data = data.hex(" ")
             ascii_data = data.decode("utf-8", "ignore").strip()
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -287,7 +288,7 @@ class SerialDevice:
             report = env.report
             # Host-assigned ID and completion timestamp (time envelope was received)
             report.id = uuid.uuid4().int & 0xFFFFFFFF
-            report.timestamp_ms = int(datetime.now().timestamp() * 1000)
+            report.timestamp_ms = int(datetime.now().timestamp())
             message = report
         elif env.HasField("dsi_ack"):
             message = env.dsi_ack
@@ -312,7 +313,7 @@ class SerialDevice:
                 hex_data = chunk.hex(" ")
                 ascii_data = chunk.decode("utf-8", "ignore").strip()
                 ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                data.append([ts, len(chunk), hex_data, ascii_data, chunk])
+                data.append([ts, len(chunk), hex_data, ascii_data, chunk, type(chunk)])
 
             time.sleep(0.25)
         print("Read complete! (simulated)")
