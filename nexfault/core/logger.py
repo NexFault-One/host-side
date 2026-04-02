@@ -54,6 +54,8 @@ class LogEntry(Base):
     id = Column(Integer, primary_key=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     owner = relationship("User", back_populates="logs")
+    profile_id = Column(String, ForeignKey("profiles.id"), nullable=True, index=True)
+    profile = relationship("Profile", back_populates="logs")
     test_name = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     log_timestamp = Column(String)
@@ -95,6 +97,7 @@ class Profile(Base):
     duration_str = Column(String, nullable=True)
     injection_params_str = Column(String, nullable=True)
     
+    logs = relationship("LogEntry", back_populates="profile")
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -238,11 +241,18 @@ def get_profiles(user_id: str = None, db: Session = Depends(get_db)):
         ) for p in profiles
     ]
 
-@app.put("/profiles/{profile_id}", response_model=ProfileResponseReact)
-def update_profile(profile_id: str, profile: ProfileBaseReact, db: Session = Depends(get_db)):
-    db_profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not db_profile: raise HTTPException(status_code=404, detail="Profile not found")
-    
+@app.put("/profiles/{profile_name}", response_model=ProfileResponseReact)
+def update_profile(
+    profile_name: str,
+    profile: ProfileBaseReact,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_profile = db.query(Profile).filter(
+        Profile.name == profile_name, Profile.owner_id == current_user.id
+    ).first()
+    if not db_profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
     db_profile.name = profile.profileName
     db_profile.description = profile.description
     db_profile.injection_type = profile.injectionType
@@ -250,82 +260,140 @@ def update_profile(profile_id: str, profile: ProfileBaseReact, db: Session = Dep
     db_profile.payload = profile.payload
     db_profile.injection_params_str = profile.injectionParams
     db_profile.duration_str = profile.duration
-
     db.commit()
     return ProfileResponseReact(id=db_profile.id, **profile.model_dump())
 
-@app.delete("/profiles/{profile_id}", status_code=204)
-def delete_profile(profile_id: str, db: Session = Depends(get_db)):
-    db_profile = db.query(Profile).filter(Profile.id == profile_id).first()
-    if not db_profile: raise HTTPException(status_code=404, detail="Profile not found")
-    db.delete(db_profile)
-    db.commit()
-
-# --- LEGACY LOGGING ENDPOINTS ---
-@app.get("/tests", response_model=list[str])
-def list_unique_tests(
+@app.delete("/profiles/{profile_name}", status_code=204)
+def delete_profile(
+    profile_name: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(LogEntry.test_name).filter(LogEntry.owner_id == current_user.id).distinct().all()
+    db_profile = db.query(Profile).filter(
+        Profile.name == profile_name, Profile.owner_id == current_user.id
+    ).first()
+    if not db_profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    db.delete(db_profile)
+    db.commit()
+
+# --- PROFILE-SCOPED TEST ENDPOINTS ---
+@app.get("/profiles/{profile_name}/tests", response_model=list[str])
+def list_tests_for_profile(
+    profile_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    profile = db.query(Profile).filter(
+        Profile.name == profile_name, Profile.owner_id == current_user.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+    query = (
+        db.query(LogEntry.test_name)
+        .filter(LogEntry.profile_id == profile.id)
+        .distinct()
+        .all()
+    )
     return [name[0] for name in query]
 
-@app.get("/tests/{test_name}")
-def get_logs_for_test(
+@app.get("/profiles/{profile_name}/tests/{test_name}")
+def get_logs_for_profile_test(
+    profile_name: str,
     test_name: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    results = db.query(LogEntry).filter(LogEntry.test_name == test_name, LogEntry.owner_id == current_user.id).all()
+    profile = db.query(Profile).filter(
+        Profile.name == profile_name, Profile.owner_id == current_user.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+    results = db.query(LogEntry).filter(
+        LogEntry.profile_id == profile.id, LogEntry.test_name == test_name
+    ).all()
     if not results:
-        raise HTTPException(status_code=404, detail=f"Test {test_name} not found.")
-    
-    output = []
-    for entry in results:
-        b64_data = base64.b64encode(entry.raw_data).decode("utf-8") if entry.raw_data else None
-        output.append({
-            "id": entry.id, "test_name": entry.test_name, "log_timestamp": entry.log_timestamp,
-            "created_at": entry.created_at, "raw_data": b64_data, "hex_data": entry.hex_data,
-            "ascii_data": entry.ascii_data, "data_type": entry.data_type,
-        })
-    return output
+        raise HTTPException(
+            status_code=404, detail=f"Test '{test_name}' not found in profile."
+        )
+    return [
+        {
+            "id": entry.id,
+            "test_name": entry.test_name,
+            "log_timestamp": entry.log_timestamp,
+            "created_at": entry.created_at,
+            "hex_data": entry.hex_data,
+            "ascii_data": entry.ascii_data,
+            "data_type": entry.data_type,
+            "raw_data": (
+                base64.b64encode(entry.raw_data).decode("utf-8")
+                if entry.raw_data else None
+            ),
+        }
+        for entry in results
+    ]
 
-@app.get("/tests/{test_name}/export")
-def export_logs(
+@app.get("/profiles/{profile_name}/tests/{test_name}/export")
+def export_profile_test_logs(
+    profile_name: str,
     test_name: str,
     format: str = "json",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    results = db.query(LogEntry).filter(LogEntry.test_name == test_name, LogEntry.owner_id == current_user.id).all()
+    profile = db.query(Profile).filter(
+        Profile.name == profile_name, Profile.owner_id == current_user.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+    results = db.query(LogEntry).filter(
+        LogEntry.profile_id == profile.id, LogEntry.test_name == test_name
+    ).all()
     if not results:
-        raise HTTPException(status_code=404, detail=f"Test '{test_name}' not found.")
-
-    rows = [{
-        "id": entry.id, "test_name": entry.test_name, "log_timestamp": entry.log_timestamp,
-        "created_at": str(entry.created_at), "hex_data": entry.hex_data, "ascii_data": entry.ascii_data,
-        "data_type": entry.data_type,
-        "raw_data": base64.b64encode(entry.raw_data).decode("utf-8") if entry.raw_data else None,
-    } for entry in results]
-
-    filename = f"{test_name}_export"
-
+        raise HTTPException(
+            status_code=404, detail=f"Test '{test_name}' not found in profile."
+        )
+    rows = [
+        {
+            "id": entry.id,
+            "test_name": entry.test_name,
+            "log_timestamp": entry.log_timestamp,
+            "created_at": str(entry.created_at),
+            "hex_data": entry.hex_data,
+            "ascii_data": entry.ascii_data,
+            "data_type": entry.data_type,
+            "raw_data": (
+                base64.b64encode(entry.raw_data).decode("utf-8")
+                if entry.raw_data else None
+            ),
+        }
+        for entry in results
+    ]
+    filename = f"{profile_name}_{test_name}_export"
     if format == "json":
-        return StreamingResponse(io.BytesIO(json.dumps(rows, indent=2).encode("utf-8")), media_type="application/json", headers={"Content-Disposition": f'attachment; filename="{filename}.json"'})
+        return StreamingResponse(
+            io.BytesIO(json.dumps(rows, indent=2).encode("utf-8")),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.json"'},
+        )
     elif format == "csv":
         buffer = io.StringIO()
         writer = csv.DictWriter(buffer, fieldnames=rows[0].keys())
         writer.writeheader()
         writer.writerows(rows)
-        return StreamingResponse(io.BytesIO(buffer.getvalue().encode("utf-8")), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'})
-    
+        return StreamingResponse(
+            io.BytesIO(buffer.getvalue().encode("utf-8")),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'},
+        )
     raise HTTPException(status_code=400, detail="format must be 'csv' or 'json'")
 
 # ------------------------------ LOG FILE CLASS ------------------------------------
 class LogFile:
-    def __init__(self, name: str, username: str):
+    def __init__(self, name: str, username: str, profile_id: str | None = None):
         self.name = name
         self.username = username
+        self.profile_id = profile_id
         Path(LOG_DIR).mkdir(exist_ok=True)
 
     def log_csv(self, headers: list[str], rows: list[list[str]]):
@@ -394,7 +462,8 @@ class LogFile:
                 dtype_str = f"{dtype_val.module}.{dtype_val.name}" if hasattr(dtype_val, "module") and hasattr(dtype_val, "name") else str(dtype_val)
 
                 log_entry = LogEntry(
-                    test_name=self.name, owner_id=owner_id, log_timestamp=str(row[p.get("Timestamp")]),
+                    test_name=self.name, owner_id=owner_id, profile_id=self.profile_id,
+                    log_timestamp=str(row[p.get("Timestamp")]),
                     raw_data=raw_val, hex_data=str(hex_val), ascii_data=ascii_val, data_type=dtype_str,
                 )
                 session.add(log_entry)

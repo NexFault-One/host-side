@@ -1,13 +1,15 @@
+import uuid
+
 from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
 
 from . import logger, parser
-from .logger import SessionLocal, User, hash_password_bcrypt, verify_password
+from .logger import Profile, SessionLocal, User, hash_password_bcrypt, verify_password
 
 # main script intended to faciliate fast debug of backend code
 SERIAL_PORT = "FAKE"  # set to "FAKE" to run without hardware, or "COMx" for real device
 BAUD_RATE = 9600
 READ_DURATION = 3
-LOG_FILE_NAME = "test"
+LOG_FILE_NAME = "test_run"
 
 # change for unique tests
 USERNAME = "test2"
@@ -15,6 +17,7 @@ EMAIL = "test2@gmail.com"
 PASSWORD = "password"
 FIRST_NAME = "Test"
 LAST_NAME = "User"
+PROFILE_NAME = "byte-drop-uart-test"
 
 
 def main():
@@ -44,6 +47,32 @@ def main():
     owner_id = user.id
     db.close()
     print(f"Logged in as {USERNAME} (ID: {owner_id})")
+
+    # ---------- create profile ----------
+    db = SessionLocal()
+    profile = db.query(Profile).filter(
+        Profile.owner_id == owner_id, Profile.name == PROFILE_NAME
+    ).first()
+    if not profile:
+        print(f"Profile '{PROFILE_NAME}' not found. Creating now.")
+        profile = Profile(
+            id=str(uuid.uuid4()),
+            owner_id=owner_id,
+            name=PROFILE_NAME,
+            description="Byte drop injection over UART",
+            injection_type="INJ_BYTE_DROP",
+            transport="TRANSPORT_UART",
+            payload="default",
+            duration_ms=5000,
+            duration_str="5000",
+            injection_params_str='{"start_offset": 0, "length": 1}',
+        )
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
+    profile_id = profile.id
+    db.close()
+    print(f"Using profile '{PROFILE_NAME}' (ID: {profile_id})")
 
     # ---------- create and initiate connection ----------
     testdevice = parser.SerialDevice(SERIAL_PORT, BAUD_RATE)
@@ -108,7 +137,7 @@ def main():
 
     # ---------- logging test ----------
     print("attempting log test")
-    log = logger.LogFile(LOG_FILE_NAME, username=USERNAME)
+    log = logger.LogFile(LOG_FILE_NAME, username=USERNAME, profile_id=profile_id)
     headers = [
         "Timestamp",
         "Length",
@@ -121,7 +150,7 @@ def main():
     log.log_json(headers, testdata)
     log.log_db(headers, testdata)
     print(log.retrieve_tests())
-    print(log.retrieve_logs("test"))
+    print(log.retrieve_logs(LOG_FILE_NAME))
     print("main complete!")
 
 
