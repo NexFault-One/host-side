@@ -141,30 +141,47 @@ def safe_pct(num: int, den: int) -> float:
     return (num / den * 100.0) if den else 0.0
 
 
-def print_report(report: uart_data_pb2.TmiReport):
+def enum_name(enum_cls, value):
+    # Works with generated protobuf enums
+    try:
+        return enum_cls.Name(value)
+    except Exception:
+        return str(value)
+
+def print_report(report):
     print("\n" + "=" * 72)
     print(" " * 24 + "TMI FINAL REPORT")
     print("=" * 72)
     print(f"Test ID:            {report.id}")
+    # todo: fix run id & attempt no
+    print(f"Run ID:             {report.run_id}")
+    print(f"Attempt No:         {report.attempt_no}")
+    #print(f"Timestamp (ms):     {report.timestamp_ms}")
     print(f"Duration:           {report.injection_duration_ms} ms")
-    print(f"Injection Type:     {report.injection_type}")
-    print(f"Transport Type:     {report.transport_type}")
+    print(f"Injection Type:     {enum_name(uart_data_pb2.InjectionType, report.injection_type)} ({report.injection_type})")
+    print(f"Transport Type:     {enum_name(uart_data_pb2.TransportType, report.transport_type)} ({report.transport_type})")
+    print(f"CRC Recalculated:   {report.crc_recalculated}")
+    print("-" * 72)
+    print(f"Bytes TX:           {report.bytes_transmitted}")
+    print(f"Bytes RX:           {report.bytes_received}")
+    print(f"Bytes Dropped:      {report.bytes_dropped}")
+    print(f"Bits Flipped:       {report.bits_flipped}")
+    print(f"Phantom Bytes:      {report.phantom_bytes_added}")
     print("-" * 72)
     print(f"Frames Sent:        {report.frames_sent}")
-    print(f"Responses OK:       {report.responses_ok} ({safe_pct(report.responses_ok, report.frames_sent):.1f}%)")
-    print(f"Responses ERROR:    {report.responses_error} ({safe_pct(report.responses_error, report.frames_sent):.1f}%)")
-    print(f"Timeouts:           {report.responses_timeout} ({safe_pct(report.responses_timeout, report.frames_sent):.1f}%)")
+    print(f"CRC Final Frame:    {report.final_frame}")
+    print(f"Responses OK:       {report.responses_ok}")
+    print(f"Responses ERROR:    {report.responses_error}")
+    print(f"Timeouts:           {report.responses_timeout}")
+    print(f"Timeout Streak:     {report.consecutive_timeout_streak}")
     print("-" * 72)
-    if report.uut_reset_suspected:
-        print(f"CRASH DETECTED:     Yes (at {report.crash_timestamp_ms} ms)")
-        print(f"Timeout Streak:     {report.consecutive_timeout_streak}")
-    else:
-        print("CRASH DETECTED:     No")
+    print(f"Crash Suspected:    {report.uut_reset_suspected}")
+    print(f"Crash Timestamp:    {report.crash_timestamp_ms} ms")
     print(f"Avg Response Time:  {report.avg_response_time_ms} ms")
     print(f"Max Response Time:  {report.max_response_time_ms} ms")
     print("-" * 72)
-    print(f"Verdict:            {report.verdict}")
-    print(f"Reason:             {report.reason}")
+    print(f"Verdict:            {enum_name(uart_data_pb2.TestVerdict, report.verdict)} ({report.verdict})")
+    print(f"Reason:             {enum_name(uart_data_pb2.FailureReason, report.reason)} ({report.reason})")
     print(f"Message:            {report.verdict_message}")
     print("=" * 72 + "\n")
 
@@ -182,7 +199,7 @@ def build_test_commands(start_id: int = 1) -> List[uart_data_pb2.DsiCommand]:
     cmd1.modbus_config.func_code = 0x06
     cmd1.modbus_config.address = 100
     cmd1.modbus_config.value_or_quantity = 50
-    cmd1.modbus_config.recalculate_crc = False
+    cmd1.modbus_config.recalculate_crc = True
     cmd1.bit_flip.mode = uart_data_pb2.BITFLIP_RANDOM
     cmd1.bit_flip.bits_drop = 5
     cmds.append(cmd1)
@@ -197,7 +214,7 @@ def build_test_commands(start_id: int = 1) -> List[uart_data_pb2.DsiCommand]:
     cmd2.modbus_config.func_code = 0x06
     cmd2.modbus_config.address = 100
     cmd2.modbus_config.value_or_quantity = 50
-    cmd2.modbus_config.recalculate_crc = False
+    cmd2.modbus_config.recalculate_crc = True
     cmd2.byte_drop.length = 1
     cmd2.byte_drop.start_offset = 2
     cmds.append(cmd2)
