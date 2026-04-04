@@ -32,6 +32,9 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 from sqlalchemy.sql import func
+
+from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
+from nexfault.core.parser import SerialDevice
 # ----------------------------- DB SETUP --------------------------------------
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 
@@ -168,6 +171,35 @@ class ProfileResponseReact(ProfileBaseReact):
     id: str
     class Config:
         from_attributes = True
+
+class InjectionRunRequest(BaseModel):
+    port: str
+    baud: int = 9600
+
+class InjectionReportResponse(BaseModel):
+    test_name: str
+    profile_name: str
+    run_id: int
+    injection_type: str
+    transport_type: str
+    injection_duration_ms: int
+    bytes_transmitted: int
+    bytes_received: int
+    bytes_dropped: int
+    bits_flipped: int
+    phantom_bytes_added: int
+    frames_sent: int
+    responses_ok: int
+    responses_error: int
+    responses_timeout: int
+    consecutive_timeout_streak: int
+    uut_reset_suspected: bool
+    crash_timestamp_ms: int
+    avg_response_time_ms: int
+    max_response_time_ms: int
+    verdict: str
+    reason: str
+    verdict_message: str
 
 # --------------------------------- API --------------------------------------
 app = FastAPI(title="LogParser Unified API")
@@ -387,6 +419,197 @@ def export_profile_test_logs(
             headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'},
         )
     raise HTTPException(status_code=400, detail="format must be 'csv' or 'json'")
+
+# --- INJECTION EXECUTION ENDPOINT ---
+
+INJECTION_TYPE_MAP = {
+    "INJ_BYTE_DROP": uart_data_pb2.InjectionType.INJ_BYTE_DROP,
+    "INJ_BIT_FLIP": uart_data_pb2.InjectionType.INJ_BIT_FLIP,
+    "INJ_PHANTOM_BYTE": uart_data_pb2.InjectionType.INJ_PHANTOM_BYTE,
+}
+
+TRANSPORT_MAP = {
+    "TRANSPORT_UART": uart_data_pb2.TransportType.TRANSPORT_UART,
+    "TRANSPORT_MODBUS": uart_data_pb2.TransportType.TRANSPORT_MODBUS,
+}
+
+
+def _build_command_from_profile(profile: Profile) -> uart_data_pb2.DsiCommand:
+    """Build a DsiCommand protobuf message from a saved profile."""
+    cmd = uart_data_pb2.DsiCommand()
+    cmd.id = uuid.uuid4().int & 0xFFFFFFFF
+    cmd.cmd = uart_data_pb2.CommandType.CMD_INJECT
+
+    inj_type = INJECTION_TYPE_MAP.get(profile.injection_type)
+    if inj_type is None:
+        raise ValueError(f"Unknown injection type: {profile.injection_type}")
+    cmd.inj_type = inj_type
+
+    transport = TRANSPORT_MAP.get(profile.transport, uart_data_pb2.TransportType.TRANSPORT_UART)
+    cmd.transport = transport
+
+    duration_ms = profile.duration_ms
+    if duration_ms is None and profile.duration_str:
+        try:
+            duration_ms = int(profile.duration_str)
+        except ValueError:
+            raise ValueError(f"Invalid duration: {profile.duration_str}")
+    cmd.duration_ms = duration_ms or 5000
+
+    # Parse injection-specific parameters
+    params = {}
+    if profile.injection_params_str:
+        try:
+            params = json.loads(profile.injection_params_str)
+        except json.JSONDecodeError:
+            pass
+    if profile.params and isinstance(profile.params, dict):
+        params.update(profile.params)
+
+    payload = profile.payload or "default"
+
+    if cmd.inj_type == uart_data_pb2.InjectionType.INJ_BYTE_DROP:
+        cmd.byte_drop.start_offset = params.get("start_offset", 0)
+        cmd.byte_drop.length = params.get("length", 1)
+        cmd.byte_drop.payload = payload
+    elif cmd.inj_type == uart_data_pb2.InjectionType.INJ_BIT_FLIP:
+        cmd.bit_flip.every_n_p = params.get("every_n_p", 2)
+        cmd.bit_flip.bits_drop = params.get("bits_drop", 1)
+        cmd.bit_flip.payload = payload
+        mode = params.get("mode", "BITFLIP_RANDOM")
+        if mode == "BITFLIP_PERIODIC":
+            cmd.bit_flip.mode = uart_data_pb2.BitFlipMode.BITFLIP_PERIODIC
+        else:
+            cmd.bit_flip.mode = uart_data_pb2.BitFlipMode.BITFLIP_RANDOM
+    elif cmd.inj_type == uart_data_pb2.InjectionType.INJ_PHANTOM_BYTE:
+        cmd.phantom_byte.offset = params.get("offset", 0)
+        cmd.phantom_byte.byte_value = params.get("byte_value", 0)
+        cmd.phantom_byte.payload = payload
+        mode = params.get("mode", "PHANTOM_RANDOM")
+        if mode == "PHANTOM_MANUAL":
+            cmd.phantom_byte.mode = uart_data_pb2.PhantomByteMode.PHANTOM_MANUAL
+        else:
+            cmd.phantom_byte.mode = uart_data_pb2.PhantomByteMode.PHANTOM_RANDOM
+
+    # Modbus config
+    if transport == uart_data_pb2.TransportType.TRANSPORT_MODBUS:
+        modbus = profile.modbus_config or params.get("modbus_config", {})
+        if modbus:
+            cmd.modbus_config.slave_id = modbus.get("slave_id", 1)
+            cmd.modbus_config.func_code = modbus.get("func_code", 0x03)
+            cmd.modbus_config.address = modbus.get("address", 0)
+            cmd.modbus_config.value_or_quantity = modbus.get(
+                "value_or_quantity", modbus.get("value", 0)
+            )
+            cmd.modbus_config.recalculate_crc = modbus.get("recalculate_crc", True)
+
+    # Burst mode
+    cmd.burst_mode = params.get("burst_mode", False)
+    cmd.burst_count = params.get("burst_count", 0)
+
+    return cmd
+
+
+def _report_to_dict(report, test_name: str, profile_name: str) -> dict:
+    """Convert a TmiReport protobuf to a serializable dict."""
+    return {
+        "test_name": test_name,
+        "profile_name": profile_name,
+        "run_id": report.run_id,
+        "injection_type": uart_data_pb2.InjectionType.Name(report.injection_type),
+        "transport_type": uart_data_pb2.TransportType.Name(report.transport_type),
+        "injection_duration_ms": report.injection_duration_ms,
+        "bytes_transmitted": report.bytes_transmitted,
+        "bytes_received": report.bytes_received,
+        "bytes_dropped": report.bytes_dropped,
+        "bits_flipped": report.bits_flipped,
+        "phantom_bytes_added": report.phantom_bytes_added,
+        "frames_sent": report.frames_sent,
+        "responses_ok": report.responses_ok,
+        "responses_error": report.responses_error,
+        "responses_timeout": report.responses_timeout,
+        "consecutive_timeout_streak": report.consecutive_timeout_streak,
+        "uut_reset_suspected": report.uut_reset_suspected,
+        "crash_timestamp_ms": report.crash_timestamp_ms,
+        "avg_response_time_ms": report.avg_response_time_ms,
+        "max_response_time_ms": report.max_response_time_ms,
+        "verdict": uart_data_pb2.TestVerdict.Name(report.verdict),
+        "reason": uart_data_pb2.FailureReason.Name(report.reason),
+        "verdict_message": report.verdict_message,
+    }
+
+
+@app.post("/profiles/{profile_name}/run", response_model=InjectionReportResponse)
+def run_injection(
+    profile_name: str,
+    run_req: InjectionRunRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Execute a fault injection test for a given profile and save results."""
+    # Look up the profile
+    profile = db.query(Profile).filter(
+        Profile.name == profile_name, Profile.owner_id == current_user.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+
+    # Build the DsiCommand from profile parameters
+    try:
+        cmd = _build_command_from_profile(profile)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Connect to DSI device, send command, and read all responses
+    dsi = SerialDevice(run_req.port, run_req.baud)
+    dsi.connect()
+    if not dsi.is_connected():
+        raise HTTPException(
+            status_code=503, detail="Failed to connect to DSI device."
+        )
+
+    try:
+        dsi.write_raw(cmd.SerializeToString())
+
+        # Read for the injection duration + buffer time
+        read_duration = (cmd.duration_ms / 1000.0) + 8.0
+        data = dsi.read_buffer(read_duration)
+    finally:
+        dsi.disconnect()
+
+    if not data:
+        raise HTTPException(
+            status_code=504,
+            detail="No data received from device during injection.",
+        )
+
+    # Save all collected messages to the database via LogFile
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    test_name = f"{profile_name}_{timestamp}"
+    headers = [
+        "Timestamp", "Length", "Data (Hex)",
+        "Data (ASCII)", "Data (Raw)", "Data Type",
+    ]
+    log = LogFile(test_name, current_user.username, profile.id)
+    log.log_db(headers, data)
+
+    # Find the TmiReport among collected messages
+    report = None
+    for row in data:
+        raw = row[4]  # Data (Raw)
+        parsed = dsi.parse_envelope(raw)
+        if isinstance(parsed, uart_data_pb2.TmiReport):
+            report = parsed
+
+    if report is None:
+        raise HTTPException(
+            status_code=504,
+            detail="Injection data was logged but no TmiReport "
+                   "was received from device.",
+        )
+
+    return _report_to_dict(report, test_name, profile_name)
+
 
 # ------------------------------ LOG FILE CLASS ------------------------------------
 class LogFile:
