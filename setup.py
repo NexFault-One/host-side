@@ -12,6 +12,7 @@ def main():
     """Installs NexFault One dependencies and submodules"""
     repo_root = Path(__file__).resolve().parent
     requirements = repo_root / "requirements.txt"
+    logs_dir = repo_root / "nexfault" / "logs"
 
     print("OS:", platform.system())
     run(f"{sys.executable} -m pip install --upgrade pip")
@@ -22,6 +23,9 @@ def main():
         cwd=repo_root,
         text=True,
     )
+
+    # Create logs directory for SQLite database
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     print("Installation complete.")
     print("Run the tool with: python run.py")
