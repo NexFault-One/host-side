@@ -298,8 +298,8 @@ def update_profile(
         raise HTTPException(status_code=404, detail="Profile not found")
     db_profile.name = profile.profileName
     db_profile.description = profile.description
-    db_profile.injection_type=normalize_injection_type(profile.injectionType),
-    db_profile.transport=normalize_transport(profile.transport),
+    db_profile.injection_type = normalize_injection_type(profile.injectionType)
+    db_profile.transport = normalize_transport(profile.transport)
     db_profile.payload = profile.payload
     db_profile.injection_params_str = profile.injectionParams
     db_profile.duration_str = profile.duration
