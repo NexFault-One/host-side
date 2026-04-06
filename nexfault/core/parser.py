@@ -8,6 +8,7 @@ from serial.tools import list_ports
 
 from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
 
+FRAME_MAX_LEN = 1024
 
 # serial device connection, data read and write logic
 class SerialDevice:
@@ -22,6 +23,7 @@ class SerialDevice:
         self.baud = baud
         self.timeout = 0.1
         self.ser = None
+        self._buf = bytearray()
 
         self._simulate = str(port).upper() == "FAKE"
 
@@ -78,10 +80,10 @@ class SerialDevice:
 
     def read_buffer(self, duration: float):
         """
-        Collect data from the device's buffer and save to an array.
-        Includes timestamp for logging purposes.
+        Collect framed protobuf messages from the device for a fixed duration.
+        Each returned row stores the protobuf payload only (without the 2-byte length prefix),
+        so parse_envelope() can decode it later.
         """
-        # Must include interrupt / synchronization to prevent incomplete read.
         if not self.is_connected():
             print("Serial device is not connected.")
             return []
@@ -92,11 +94,40 @@ class SerialDevice:
         print(f"Reading data on {self.port} for {duration}s")
         end_time = time.time() + duration
         data = []
+
         while time.time() < end_time:
-            if self.ser.in_waiting > 0:
-                read_data = self.ser.read(self.ser.in_waiting)
-                read_log = self.log_entry(read_data)
-                data.append(read_log)
+            try:
+                chunk = self.ser.read(self.ser.in_waiting or 1)
+            except serial.SerialException as e:
+                print(f"Serial read error: {e}")
+                break
+
+            if not chunk:
+                time.sleep(0.01)
+                continue
+
+            self._buf.extend(chunk)
+
+            while True:
+                if len(self._buf) < 2:
+                    break
+
+                msg_len = int.from_bytes(self._buf[:2], "little")
+
+                if msg_len == 0 or msg_len > FRAME_MAX_LEN:
+                    # drop one byte and resync, same idea as Nizar's testbench_tmi.py logic
+                    self._buf.pop(0)
+                    continue
+
+                frame_total = 2 + msg_len
+                if len(self._buf) < frame_total:
+                    break
+
+                payload = bytes(self._buf[2:frame_total])
+                del self._buf[:frame_total]
+
+                data.append(self.log_entry(payload))
+
         print("Read complete!")
         return data
 
