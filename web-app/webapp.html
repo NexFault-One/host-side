@@ -230,7 +230,10 @@
                     
                     const data = await response.json();
                     if (response.ok) {
-                        onSuccess(data); 
+                        onSuccess(data, {
+                            email: formData.email,
+                            password: formData.password,
+                        });
                     } else {
                         setError(data.detail || "Login failed");
                     }
@@ -312,7 +315,10 @@
                     
                     const data = await response.json();
                     if (response.ok) {
-                        onSuccess(data);
+                        onSuccess(data, {
+                            email: formData.email,
+                            password: formData.password,
+                        });
                     } else {
                         setError(data.detail || "Registration failed");
                     }
@@ -380,7 +386,7 @@
         // ==========================================
         // DASHBOARD COMPONENT
         // ==========================================
-        const Dashboard = ({ user, onLogout }) => {
+        const Dashboard = ({ user, auth, onLogout }) => {
             const [activeTab, setActiveTab] = React.useState('history');
             const [profileSearch, setProfileSearch] = React.useState(''); 
             
@@ -390,6 +396,15 @@
             React.useEffect(() => { lucide.createIcons(); });
 
             const [runs, setRuns] = React.useState([]);
+
+            const [runForm, setRunForm] = React.useState({
+                selectedProfileName: '',
+                port: 'FAKE',
+                baud: '9600',
+                running: false,
+                error: null,
+                result: null,
+            });
 
             const [profiles, setProfiles] = React.useState([]);
             const [editingId, setEditingId] = React.useState(null);
@@ -416,8 +431,16 @@
                 }
             };
 
+            const buildBasicAuthHeaders = () => { 
+                if (!auth?.email || !auth?.password) {
+                    return {}; 
+                } return { 
+                    Authorization: `Basic ${btoa(`${auth.email}:${auth.password}`)}` 
+                }; 
+            };
+
             React.useEffect(() => {
-                if (activeTab === 'config') fetchProfiles();
+                if (activeTab === 'config' || activeTab === 'run') fetchProfiles();
             }, [activeTab]);
 
             React.useEffect(() => {
@@ -437,6 +460,15 @@
                     });
                 }
             }, [editingId, profiles, user.id]);
+
+            React.useEffect(() => {
+              if (profiles.length > 0 && !runForm.selectedProfileName) {
+                setRunForm(prev => ({
+                  ...prev,
+                  selectedProfileName: profiles[0].profileName
+                }));
+              }
+            }, [profiles]);
 
             const handleConfigChange = (e) => {
                 const { name, value } = e.target;
@@ -480,6 +512,52 @@
                 }
             };
 
+            const handleRunSavedProfile = async () => {
+                if (!runForm.selectedProfileName) return;
+
+                if (!auth?.email || !auth?.password) { 
+                    setRunForm(prev => ({ ...prev, error: 'Not authenticated', })); 
+                    return; 
+                }
+                setRunForm(prev => ({
+                    ...prev,
+                    running: true,
+                    error: null,
+                    result: null,
+                }));
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/profiles/${encodeURIComponent(runForm.selectedProfileName)}/run`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...buildBasicAuthHeaders(),
+                            },
+                            body: JSON.stringify({
+                                port: runForm.port,
+                                baud: Number(runForm.baud),
+                            }),
+                        }
+                    );
+                    const data = await response.json();
+                    if (!response.ok) {
+                        throw new Error(data.detail || 'Run failed');
+                    }
+                    setRunForm(prev => ({
+                        ...prev,
+                        running: false,
+                        result: data,
+                    }));
+                } catch (err) {
+                    setRunForm(prev => ({
+                        ...prev,
+                        running: false,
+                        error: err.message || 'Run failed',
+                    }));
+                }
+            };
+
             const handleDeleteProfile = async (id, e) => {
                 e.stopPropagation();
                 if (!window.confirm("Are you sure you want to delete this profile?")) return;
@@ -518,6 +596,7 @@
                         <nav className="flex-1 p-4 space-y-2">
                             <button onClick={() => setActiveTab('history')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'history' ? 'bg-teal-600/10 text-teal-400' : 'hover:bg-slate-700/50 hover:text-white'}`}><FileText /> Test History</button>
                             <button onClick={() => setActiveTab('config')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${activeTab === 'config' ? 'bg-teal-600/10 text-teal-400' : 'hover:bg-slate-700/50 hover:text-white'}`}><Settings /> Configurations</button>
+                            <button onClick={() => setActiveTab('run')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${ activeTab === 'run' ? 'bg-teal-600/10 text-teal-400' : 'hover:bg-slate-700/50 hover:text-white' }`} > <Activity /> Run Test </button>
                         </nav>
                         <div className="p-4 border-t border-slate-700">
                             <button onClick={onLogout} className="flex items-center gap-3 w-full hover:bg-slate-700/50 hover:text-white px-4 py-3 rounded-xl font-medium transition-colors text-sm"><LogOut /> Sign Out</button>
@@ -527,8 +606,21 @@
                     <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
                         <header className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between z-10 shrink-0">
                             <div>
-                                <h1 className="text-xl font-bold text-slate-800 tracking-tight">{activeTab === 'history' ? 'Recent Executions' : 'Profile Configuration'}</h1>
-                                <p className="text-xs text-slate-400 font-medium">{activeTab === 'history' ? 'Review past fault injection runs' : 'Create and manage injection profiles'}</p>
+                                <h1 className="text-xl font-bold text-slate-800 tracking-tight">
+                                    {activeTab === 'history'
+                                        ? 'Recent Executions'
+                                        : activeTab === 'config'
+                                        ? 'Profile Configuration'
+                                        : 'Run Test'
+                                    }
+                                </h1>
+                                <p className="text-xs text-slate-400 font-medium">
+                                    {activeTab === 'history'
+                                        ? 'Review past fault injection runs'
+                                        : activeTab === 'config'
+                                        ? 'Create and manage injection profiles'
+                                        : 'Launch a saved injection profile from the browser'}
+                                </p>
                             </div>
                         </header>
 
@@ -707,6 +799,93 @@
                                     </div>
                                 </div>
                             )}
+                            {activeTab === 'run' && (
+                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm p-8 animate-slide">
+                                    <div className="max-w-3xl space-y-6">
+                                    <div>
+                                        <h2 className="text-2xl font-black text-slate-800">Run Test</h2>
+                                        <p className="text-sm text-slate-500 mt-1">
+                                        Launch a saved injection profile directly from the browser.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">
+                                            Saved Profile
+                                        </label>
+                                        <select
+                                            value={runForm.selectedProfileName}
+                                            onChange={(e) =>
+                                            setRunForm(prev => ({ ...prev, selectedProfileName: e.target.value }))
+                                            }
+                                            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm"
+                                        >
+                                            <option value="">Select a profile</option>
+                                            {profiles.map((profile) => (
+                                            <option key={profile.id} value={profile.profileName}>
+                                                {profile.profileName}
+                                            </option>
+                                            ))}
+                                        </select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">
+                                            Serial Port
+                                        </label>
+                                        <input
+                                            value={runForm.port}
+                                            onChange={(e) =>
+                                            setRunForm(prev => ({ ...prev, port: e.target.value }))
+                                            }
+                                            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm"
+                                            placeholder="FAKE or COM5"
+                                        />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">
+                                            Baud
+                                        </label>
+                                        <input
+                                            value={runForm.baud}
+                                            onChange={(e) =>
+                                            setRunForm(prev => ({ ...prev, baud: e.target.value }))
+                                            }
+                                            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm"
+                                            placeholder="9600"
+                                        />
+                                        </div>
+                                    </div>
+
+                                    {runForm.error && (
+                                        <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl font-bold border border-red-100">
+                                        {runForm.error}
+                                        </div>
+                                    )}
+
+                                    <button
+                                        onClick={handleRunSavedProfile}
+                                        disabled={runForm.running || !runForm.selectedProfileName}
+                                        className="px-6 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition disabled:opacity-50"
+                                    >
+                                        {runForm.running ? 'Running...' : 'Run Saved Profile'}
+                                    </button>
+
+                                    {runForm.result && (
+                                        <div className="mt-6 bg-slate-900 rounded-xl overflow-hidden border border-slate-800">
+                                        <div className="px-4 py-3 border-b border-slate-800 text-slate-300 text-xs font-bold uppercase tracking-widest">
+                                            Latest Run Result
+                                        </div>
+                                        <pre className="p-4 text-xs text-slate-200 overflow-x-auto whitespace-pre-wrap">
+                                            {JSON.stringify(runForm.result, null, 2)}
+                                        </pre>
+                                        </div>
+                                    )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </main>
                 </div>
@@ -780,15 +959,18 @@
         // ==========================================
         const App = () => {
             const [view, setView] = React.useState('landing');
-            const [currentUser, setCurrentUser] = React.useState(null); 
+            const [currentUser, setCurrentUser] = React.useState(null);
+            const [auth, setAuth] = React.useState(null);
             
-            const handleAuthSuccess = (userData) => {
+            const handleAuthSuccess = (userData, creds) => {
                 setCurrentUser(userData);
+                setAuth(creds);
                 setView('dashboard');
             };
 
             const handleLogout = () => {
                 setCurrentUser(null);
+                setAuth(null);
                 setView('landing');
             };
 
@@ -797,7 +979,7 @@
                     {view === 'landing' && <LandingPage onSignUp={() => setView('signup')} onLogin={() => setView('login')} />}
                     {view === 'login' && <LoginPage onBack={() => setView('landing')} onSuccess={handleAuthSuccess} />}
                     {view === 'signup' && <SignUpPage onBack={() => setView('landing')} onSuccess={handleAuthSuccess} />}
-                    {view === 'dashboard' && currentUser && <Dashboard user={currentUser} onLogout={handleLogout} />}
+                    {view === 'dashboard' && currentUser && ( <Dashboard user={currentUser} auth={auth} onLogout={handleLogout} /> )}
                 </React.Fragment>
             );
         };
