@@ -34,7 +34,7 @@ class SerialDevice:
             self.description = "Fake Serial (simulated)"
             self.hwid = "SIM-FAKE-PORT"
 
-    def connect(self):
+    def connect(self, do_handshake: bool = False):
         """Attempt connection to serial port."""
         try:
             print(f"Attempting connection to {self.port} with baud {self.baud}")
@@ -110,9 +110,23 @@ class SerialDevice:
         self.ser.flush()
         print(message)
         return True
+    
+    def write_protobuf(self, message: bytes):
+        if not self.is_connected():
+            print("Serial buffer not initialized.")
+            return False
+        msg_len = len(message)
+        prefix = msg_len.to_bytes(2, "little")
+        self.ser.write(prefix + message)
+        self.ser.flush()
+        print(prefix + message)
+        return True
 
     def write_raw(self, message):
         """Write message ignoring protobuf structure and safety checks."""
+        if self._simulate:
+            print(message)
+            return True
         self.ser.write(message)
         self.ser.flush()
         print(message)
@@ -252,7 +266,7 @@ class SerialDevice:
         cfg.slave_id = slave_id
         cfg.func_code = func_code
         cfg.address = address
-        cfg.value = value
+        cfg.value_or_quantity = value
         cfg.recalculate_crc = recalculate_crc
         return cfg
 
@@ -287,8 +301,8 @@ class SerialDevice:
         if env.HasField("report"):
             report = env.report
             # Host-assigned ID and completion timestamp (time envelope was received)
-            report.id = uuid.uuid4().int & 0xFFFFFFFF
-            report.timestamp_ms = int(datetime.now().timestamp())
+            # report.id = uuid.uuid4().int & 0xFFFFFFFF
+            # report.timestamp_ms = int(datetime.now().timestamp())
             message = report
         elif env.HasField("dsi_ack"):
             message = env.dsi_ack

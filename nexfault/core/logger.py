@@ -131,7 +131,7 @@ def get_current_user(
     credentials: HTTPBasicCredentials = Depends(security),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.username == credentials.username).first()
+    user = db.query(User).filter((User.username == credentials.username) | (User.email == credentials.username)).first()    
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(
             status_code=401,
@@ -201,6 +201,17 @@ class InjectionReportResponse(BaseModel):
     reason: str
     verdict_message: str
 
+class RunHistoryItem(BaseModel): # real history source, not just per-test raw logs
+    test_name: str
+    profile_name: str
+    created_at: str
+    injection_type: str
+    transport_type: str
+    verdict: str
+    reason: str
+    status: str
+    injection_duration_ms: int
+
 # --------------------------------- API --------------------------------------
 app = FastAPI(title="LogParser Unified API")
 
@@ -247,8 +258,8 @@ def create_profile(profile: ProfileBaseReact, db: Session = Depends(get_db)):
         owner_id=int(profile.userId),
         name=profile.profileName,
         description=profile.description,
-        injection_type=profile.injectionType,
-        transport=profile.transport,
+        injection_type=normalize_injection_type(profile.injectionType),
+        transport=normalize_transport(profile.transport),
         payload=profile.payload,
         injection_params_str=profile.injectionParams,
         duration_str=profile.duration
@@ -287,8 +298,8 @@ def update_profile(
         raise HTTPException(status_code=404, detail="Profile not found")
     db_profile.name = profile.profileName
     db_profile.description = profile.description
-    db_profile.injection_type = profile.injectionType
-    db_profile.transport = profile.transport
+    db_profile.injection_type=normalize_injection_type(profile.injectionType),
+    db_profile.transport=normalize_transport(profile.transport),
     db_profile.payload = profile.payload
     db_profile.injection_params_str = profile.injectionParams
     db_profile.duration_str = profile.duration
@@ -420,6 +431,55 @@ def export_profile_test_logs(
         )
     raise HTTPException(status_code=400, detail="format must be 'csv' or 'json'")
 
+@app.get("/runs", response_model=list[RunHistoryItem])
+def get_runs(user_id: str, db: Session = Depends(get_db)):
+    profiles = {
+        p.id: p.name
+        for p in db.query(Profile).filter(Profile.owner_id == int(user_id)).all()
+    }
+
+    logs = (
+        db.query(LogEntry)
+        .filter(LogEntry.owner_id == int(user_id))
+        .order_by(LogEntry.created_at.desc())
+        .all()
+    )
+
+    runs = []
+    temp_rows = {}
+
+    for log in logs:
+        if log.test_name not in temp_rows:
+            temp_rows[log.test_name] = []
+        temp_rows[log.test_name].append(log)
+
+    parser_device = SerialDevice("FAKE", 9600)
+
+    for test_name, rows in temp_rows.items():
+        report = None
+        profile_name = profiles.get(rows[0].profile_id, "Unknown Profile")
+        created_at = str(rows[0].created_at)
+
+        for row in rows:
+            parsed = parser_device.parse_envelope(row.raw_data)
+            if isinstance(parsed, uart_data_pb2.TmiReport):
+                report = parsed
+                break
+
+        if report:
+            runs.append({
+                "test_name": test_name,
+                "profile_name": profile_name,
+                "created_at": created_at,
+                "injection_type": uart_data_pb2.InjectionType.Name(report.injection_type),
+                "transport_type": uart_data_pb2.TransportType.Name(report.transport_type),
+                "verdict": uart_data_pb2.TestVerdict.Name(report.verdict),
+                "reason": uart_data_pb2.FailureReason.Name(report.reason),
+                "status": uart_data_pb2.ExecStatus.Name(report.status),
+                "injection_duration_ms": report.injection_duration_ms,
+            })
+
+    return runs
 # --- INJECTION EXECUTION ENDPOINT ---
 
 INJECTION_TYPE_MAP = {
@@ -433,6 +493,27 @@ TRANSPORT_MAP = {
     "TRANSPORT_MODBUS": uart_data_pb2.TransportType.TRANSPORT_MODBUS,
 }
 
+def normalize_injection_type(value: str) -> str:
+    mapping = {
+        "BYTE_DROP": "INJ_BYTE_DROP",
+        "BIT_FLIP": "INJ_BIT_FLIP",
+        "PHANTOM_BYTE": "INJ_PHANTOM_BYTE",
+        "INJ_BYTE_DROP": "INJ_BYTE_DROP",
+        "INJ_BIT_FLIP": "INJ_BIT_FLIP",
+        "INJ_PHANTOM_BYTE": "INJ_PHANTOM_BYTE",
+    }
+    return mapping.get(value, value)
+
+def normalize_transport(value: str) -> str:
+    mapping = {
+        "UART": "TRANSPORT_UART",
+        "MODBUS": "TRANSPORT_MODBUS",
+        "Modbus": "TRANSPORT_MODBUS",
+        "TRANSPORT_UART": "TRANSPORT_UART",
+        "TRANSPORT_MODBUS": "TRANSPORT_MODBUS",
+    }
+    return mapping.get(value, value)
+
 
 def _build_command_from_profile(profile: Profile) -> uart_data_pb2.DsiCommand:
     """Build a DsiCommand protobuf message from a saved profile."""
@@ -440,12 +521,17 @@ def _build_command_from_profile(profile: Profile) -> uart_data_pb2.DsiCommand:
     cmd.id = uuid.uuid4().int & 0xFFFFFFFF
     cmd.cmd = uart_data_pb2.CommandType.CMD_INJECT
 
-    inj_type = INJECTION_TYPE_MAP.get(profile.injection_type)
+    normalized_inj = normalize_injection_type(profile.injection_type)
+    inj_type = INJECTION_TYPE_MAP.get(normalized_inj)
     if inj_type is None:
         raise ValueError(f"Unknown injection type: {profile.injection_type}")
     cmd.inj_type = inj_type
 
-    transport = TRANSPORT_MAP.get(profile.transport, uart_data_pb2.TransportType.TRANSPORT_UART)
+    normalized_transport = normalize_transport(profile.transport)
+    transport = TRANSPORT_MAP.get(
+        normalized_transport,
+        uart_data_pb2.TransportType.TRANSPORT_UART
+    )
     cmd.transport = transport
 
     duration_ms = profile.duration_ms
@@ -469,24 +555,22 @@ def _build_command_from_profile(profile: Profile) -> uart_data_pb2.DsiCommand:
     payload = profile.payload or "default"
 
     if cmd.inj_type == uart_data_pb2.InjectionType.INJ_BYTE_DROP:
-        cmd.byte_drop.start_offset = params.get("start_offset", 0)
+        cmd.byte_drop.start_offset = params.get("start_offset", params.get("startOffset", 0))
         cmd.byte_drop.length = params.get("length", 1)
         cmd.byte_drop.payload = payload
     elif cmd.inj_type == uart_data_pb2.InjectionType.INJ_BIT_FLIP:
-        cmd.bit_flip.every_n_p = params.get("every_n_p", 2)
-        cmd.bit_flip.bits_drop = params.get("bits_drop", 1)
-        cmd.bit_flip.payload = payload
+        cmd.bit_flip.every_n_p = params.get("every_n_p", params.get("everyNPackets", 2))
+        cmd.bit_flip.bits_drop = params.get("bits_drop", params.get("bitsToDrop", 1))
         mode = params.get("mode", "BITFLIP_RANDOM")
-        if mode == "BITFLIP_PERIODIC":
+        if mode in ["BITFLIP_PERIODIC", "Periodic", "Sequential"]:
             cmd.bit_flip.mode = uart_data_pb2.BitFlipMode.BITFLIP_PERIODIC
         else:
             cmd.bit_flip.mode = uart_data_pb2.BitFlipMode.BITFLIP_RANDOM
     elif cmd.inj_type == uart_data_pb2.InjectionType.INJ_PHANTOM_BYTE:
         cmd.phantom_byte.offset = params.get("offset", 0)
-        cmd.phantom_byte.byte_value = params.get("byte_value", 0)
-        cmd.phantom_byte.payload = payload
+        cmd.phantom_byte.byte_value = params.get("byte_value", params.get("byteValue", 0))
         mode = params.get("mode", "PHANTOM_RANDOM")
-        if mode == "PHANTOM_MANUAL":
+        if mode in ["PHANTOM_MANUAL", "Manual", "Inject"]:
             cmd.phantom_byte.mode = uart_data_pb2.PhantomByteMode.PHANTOM_MANUAL
         else:
             cmd.phantom_byte.mode = uart_data_pb2.PhantomByteMode.PHANTOM_RANDOM
@@ -562,18 +646,59 @@ def run_injection(
 
     # Connect to DSI device, send command, and read all responses
     dsi = SerialDevice(run_req.port, run_req.baud)
-    dsi.connect()
+    dsi.connect(do_handshake=False)
+
     if not dsi.is_connected():
         raise HTTPException(
             status_code=503, detail="Failed to connect to DSI device."
         )
 
     try:
-        dsi.write_raw(cmd.SerializeToString())
+        if str(run_req.port).upper() == "FAKE":
+            tmi = uart_data_pb2.TmiReport()
+            tmi.id = cmd.id
+            tmi.run_id = cmd.id
+            tmi.attempt_no = 1
+            tmi.injection_type = cmd.inj_type
+            tmi.transport_type = cmd.transport
+            tmi.injection_duration_ms = cmd.duration_ms
+            tmi.bytes_transmitted = 8
+            tmi.bytes_received = 0
+            tmi.bytes_dropped = 0
+            tmi.bits_flipped = 5 if cmd.inj_type == uart_data_pb2.InjectionType.INJ_BIT_FLIP else 0
+            tmi.phantom_bytes_added = 1 if cmd.inj_type == uart_data_pb2.InjectionType.INJ_PHANTOM_BYTE else 0
+            tmi.frames_sent = 4
+            tmi.responses_ok = 0
+            tmi.responses_error = 0
+            tmi.responses_timeout = 4
+            tmi.consecutive_timeout_streak = 4
+            tmi.uut_reset_suspected = False
+            tmi.crash_timestamp_ms = 0
+            tmi.avg_response_time_ms = 0
+            tmi.max_response_time_ms = 0
+            tmi.status = uart_data_pb2.ExecStatus.STATUS_DONE
+            tmi.verdict = uart_data_pb2.TestVerdict.VERDICT_PASS
+            tmi.reason = uart_data_pb2.FailureReason.FAIL_NONE
+            tmi.verdict_message = "Simulated run completed successfully."
 
-        # Read for the injection duration + buffer time
-        read_duration = (cmd.duration_ms / 1000.0) + 8.0
-        data = dsi.read_buffer(read_duration)
+            env = uart_data_pb2.Envelope()
+            env.report.CopyFrom(tmi)
+            tmi_raw = env.SerializeToString()
+
+            # Sanity check before logging anything
+            parsed = dsi.parse_envelope(tmi_raw)
+            if not isinstance(parsed, uart_data_pb2.TmiReport):
+                raise HTTPException(
+                    status_code=500,
+                    detail="FAKE TmiReport round-trip failed before logging."
+                )
+
+            # Keeps FAKE mode minimal and deterministic
+            data = [dsi.log_entry(tmi_raw)]
+        else:
+            dsi.write_protobuf(cmd.SerializeToString())
+            read_duration = (cmd.duration_ms / 1000.0) + 8.0
+            data = dsi.read_buffer(read_duration)
     finally:
         dsi.disconnect()
 

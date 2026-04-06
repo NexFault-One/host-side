@@ -65,28 +65,11 @@
 
             // Real functional download logic
             const handleDownloadJSON = () => {
-                const dataStr = JSON.stringify(run, null, 2);
-                const blob = new Blob([dataStr], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${run.id}_export.json`;
-                a.click();
-                URL.revokeObjectURL(url);
+                alert("Real export not wired yet.");
             };
 
             const handleDownloadCSV = () => {
-                // Simple flat CSV converter for the mock data
-                const headers = Object.keys(run).join(',');
-                const values = Object.values(run).map(v => `"${v}"`).join(',');
-                const csvStr = `${headers}\n${values}`;
-                const blob = new Blob([csvStr], { type: "text/csv" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${run.id}_export.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
+                alert("Real export not wired yet.");
             };
 
             return (
@@ -406,18 +389,7 @@
             
             React.useEffect(() => { lucide.createIcons(); });
 
-            const mockResults = [
-                { id: 'run-001', profileName: 'UART Byte Drop Test', transport: 'UART', injectionType: 'BYTE_DROP', duration: '5023 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 9, 06:15 AM' },
-                { id: 'run-002', profileName: 'MODBUS CRC Flip', transport: 'MODBUS', injectionType: 'BIT_FLIP', duration: '3012 ms', status: 'Completed', verdict: 'FAIL', timestamp: 'Mar 9, 05:45 AM' },
-                { id: 'run-003', profileName: 'I2C Phantom Inject', transport: 'I2C', injectionType: 'PHANTOM_BYTE', duration: '2005 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 9, 04:30 AM' },
-                { id: 'run-004', profileName: 'MODBUS Slave Chaos', transport: 'MODBUS', injectionType: 'BIT_FLIP', duration: '10500 ms', status: 'Failed', verdict: 'INCONCLUSIVE', timestamp: 'Mar 8, 12:20 PM' },
-                { id: 'run-005', profileName: 'UART Byte Drop Test', transport: 'UART', injectionType: 'BYTE_DROP', duration: '5018 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 8, 10:00 AM' },
-                { id: 'run-006', profileName: 'UART Stress Test - Long', transport: 'UART', injectionType: 'BYTE_DROP', duration: '30245 ms', status: 'Completed', verdict: 'FAIL', timestamp: 'Mar 8, 07:30 AM' },
-                { id: 'run-007', profileName: 'I2C Address Confusion', transport: 'I2C', injectionType: 'PHANTOM_BYTE', duration: '4089 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 7, 10:45 AM' },
-                { id: 'run-008', profileName: 'MODBUS CRC Flip', transport: 'MODBUS', injectionType: 'BIT_FLIP', duration: '3008 ms', status: 'Completed', verdict: 'PASS', timestamp: 'Mar 7, 05:20 AM' },
-                { id: 'run-009', profileName: 'UART Dropped Frame', transport: 'UART', injectionType: 'BYTE_DROP', duration: '5020 ms', status: 'Failed', verdict: 'FAIL', timestamp: 'Mar 6, 02:15 PM' },
-                { id: 'run-010', profileName: 'I2C Clock Stretch', transport: 'I2C', injectionType: 'BIT_FLIP', duration: '8042 ms', status: 'Completed', verdict: 'INCONCLUSIVE', timestamp: 'Mar 6, 09:10 AM' }
-            ];
+            const [runs, setRuns] = React.useState([]);
 
             const [profiles, setProfiles] = React.useState([]);
             const [editingId, setEditingId] = React.useState(null);
@@ -530,8 +502,7 @@
             return (
                 <div className="min-h-screen flex bg-slate-50 animate-slide">
                     
-                    {/* Render the Modal if a run is selected */}
-                    {selectedRun && (
+                    {false && selectedRun && (
                         <RunDetailsModal run={selectedRun} onClose={() => setSelectedRun(null)} />
                     )}
 
@@ -564,54 +535,13 @@
                         <div className={`flex-1 overflow-hidden flex flex-col ${activeTab === 'history' ? 'p-8' : ''}`}>
                             
                             {activeTab === 'history' && (
-                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden animate-slide">
-                                    <div className="flex-1 overflow-y-auto">
-                                        <table className="w-full text-left border-collapse relative">
-                                            <thead className="sticky top-0 bg-slate-50 z-10 shadow-sm">
-                                                <tr className="border-b border-slate-200 text-[10px] uppercase tracking-widest text-slate-500 font-bold">
-                                                    <th className="px-6 py-4">Run ID</th>
-                                                    <th className="px-6 py-4">Profile Name</th>
-                                                    <th className="px-6 py-4">Transport</th>
-                                                    <th className="px-6 py-4">Injection Type</th>
-                                                    <th className="px-6 py-4">Duration</th>
-                                                    <th className="px-6 py-4">Status</th>
-                                                    <th className="px-6 py-4">Verdict</th>
-                                                    <th className="px-6 py-4 text-right">Timestamp</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100 text-sm font-medium text-slate-600">
-                                                {mockResults.map((result) => (
-                                                    <tr 
-                                                        key={result.id} 
-                                                        onClick={() => setSelectedRun(result)} // Opens the modal
-                                                        className="hover:bg-slate-50/50 transition-colors cursor-pointer group"
-                                                    >
-                                                        <td className="px-6 py-4 font-mono text-xs text-slate-400 group-hover:text-teal-600 transition-colors">{result.id}</td>
-                                                        <td className="px-6 py-4 font-bold text-slate-800">{result.profileName}</td>
-                                                        <td className="px-6 py-4">
-                                                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border border-slate-200">
-                                                                {result.transport}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border border-slate-200">
-                                                                {result.injectionType}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-slate-500 font-mono text-xs">{result.duration}</td>
-                                                        <td className={`px-6 py-4 ${result.status === 'Completed' ? 'text-teal-600 font-bold' : 'text-red-500 font-bold'}`}>
-                                                            {result.status}
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            {result.verdict === 'PASS' && <span className="bg-teal-100 text-teal-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">PASS</span>}
-                                                            {result.verdict === 'FAIL' && <span className="bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">FAIL</span>}
-                                                            {result.verdict === 'INCONCLUSIVE' && <span className="bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">INCONCLUSIVE</span>}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-right text-slate-400 text-xs whitespace-nowrap">{result.timestamp}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center justify-center animate-slide">
+                                    <div className="text-center max-w-md px-8">
+                                        <div className="text-lg font-bold text-slate-800 mb-2">No real test runs yet</div>
+                                        <p className="text-sm text-slate-500 leading-relaxed">
+                                            Test History is now disconnected from mock data.
+                                            Real runs will appear here once we wire profile execution to the backend run endpoint.
+                                        </p>
                                     </div>
                                 </div>
                             )}
