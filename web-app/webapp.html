@@ -409,14 +409,168 @@
             const [profiles, setProfiles] = React.useState([]);
             const [editingId, setEditingId] = React.useState(null);
 
+            const DEFAULT_MODBUS_CONFIG = {
+                slave_id: '1',
+                func_code: '6',
+                address: '100',
+                value_or_quantity: '50',
+                recalculate_crc: true,
+            };
+
             const PARAM_DEFAULTS = {
-                BIT_FLIP: { everyNPackets: '100', bitsToDrop: '1', mode: 'Random' },
-                BYTE_DROP: { startOffset: '0', length: '4' },
-                PHANTOM_BYTE: { offset: '0', byteValue: '0x00', mode: 'Inject' }
+                INJ_BIT_FLIP: {
+                    every_n_p: '100',
+                    bits_drop: '1',
+                    mode: 'BITFLIP_RANDOM',
+                },
+                INJ_BYTE_DROP: {
+                    start_offset: '0',
+                    length: '1',
+                },
+                INJ_PHANTOM_BYTE: {
+                    offset: '0',
+                    byte_value: '0',
+                    mode: 'PHANTOM_MANUAL',
+                },
+            };
+
+            const normalizeTransport = (value) => {
+                const map = {
+                    UART: 'TRANSPORT_UART',
+                    TRANSPORT_UART: 'TRANSPORT_UART',
+                    Modbus: 'TRANSPORT_MODBUS',
+                    MODBUS: 'TRANSPORT_MODBUS',
+                    TRANSPORT_MODBUS: 'TRANSPORT_MODBUS',
+                    I2C: 'TRANSPORT_I2C',
+                    TRANSPORT_I2C: 'TRANSPORT_I2C',
+                };
+                return map[value] || value || 'TRANSPORT_UART';
+            };
+
+            const normalizeInjectionType = (value) => {
+                const map = {
+                    BIT_FLIP: 'INJ_BIT_FLIP',
+                    INJ_BIT_FLIP: 'INJ_BIT_FLIP',
+                    BYTE_DROP: 'INJ_BYTE_DROP',
+                    INJ_BYTE_DROP: 'INJ_BYTE_DROP',
+                    PHANTOM_BYTE: 'INJ_PHANTOM_BYTE',
+                    INJ_PHANTOM_BYTE: 'INJ_PHANTOM_BYTE',
+                };
+                return map[value] || value || 'INJ_BIT_FLIP';
+            };
+
+            const parseMaybeHexInt = (value, fallback = 0) => {
+                if (value === undefined || value === null || value === '') return fallback;
+                if (typeof value === 'number') return value;
+                const trimmed = String(value).trim();
+                if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) {
+                    const parsed = parseInt(trimmed, 16);
+                    return Number.isNaN(parsed) ? fallback : parsed;
+                }
+                const parsed = parseInt(trimmed, 10);
+                return Number.isNaN(parsed) ? fallback : parsed;
+            };
+
+            const normalizeParamsForForm = (injType, rawParams, transport) => {
+                const normalized = { ...(PARAM_DEFAULTS[injType] || {}) };
+                const p = rawParams || {};
+            
+                if (injType === 'INJ_BIT_FLIP') {
+                    normalized.every_n_p = String(
+                        p.every_n_p ?? p.every_n_p ?? normalized.every_n_p ?? '100'
+                    );
+                    normalized.bits_drop = String(
+                        p.bits_drop ?? p.bits_drop ?? normalized.bits_drop ?? '1'
+                    );
+                    normalized.mode =
+                        p.mode === 'BITFLIP_PERIODIC' || p.mode === 'Periodic'
+                            ? 'BITFLIP_PERIODIC'
+                            : p.mode || normalized.mode;
+                }
+
+                if (injType === 'INJ_BYTE_DROP') {
+                    normalized.start_offset = String(
+                        p.start_offset ?? p.start_offset ?? normalized.start_offset ?? '0'
+                    );
+                    normalized.length = String(
+                        p.length ?? normalized.length ?? '1'
+                    );
+                }
+
+                if (injType === 'INJ_PHANTOM_BYTE') {
+                    normalized.offset = String(
+                        p.offset ?? normalized.offset ?? '0'
+                    );
+                    normalized.byte_value = String(
+                        p.byte_value ?? p.byte_value ?? normalized.byte_value ?? '0'
+                    );
+                    normalized.mode =
+                        p.mode === 'PHANTOM_MANUAL' || p.mode === 'Manual'
+                            ? 'PHANTOM_MANUAL'
+                            : p.mode || normalized.mode;
+                }
+
+                if (transport === 'TRANSPORT_MODBUS') {
+                    normalized.modbus_config = {
+                        ...DEFAULT_MODBUS_CONFIG,
+                        ...(p.modbus_config || {}),
+                    };
+                }
+                return normalized;
+        };
+
+            const buildSavePayload = (form) => {
+                const injectionType = normalizeInjectionType(form.injectionType);
+                const transport = normalizeTransport(form.transport);
+                const params = { ...form.injectionParams };
+            
+                if (injectionType === 'INJ_BIT_FLIP') {
+                    params.every_n_p = parseMaybeHexInt(params.every_n_p, 100);
+                    params.bits_drop = parseMaybeHexInt(params.bits_drop, 1);
+                    params.mode =
+                        params.mode === 'BITFLIP_PERIODIC' ? 'BITFLIP_PERIODIC' : 'BITFLIP_RANDOM';
+                }
+            
+                if (injectionType === 'INJ_BYTE_DROP') {
+                    params.start_offset = parseMaybeHexInt(params.start_offset, 0);
+                    params.length = parseMaybeHexInt(params.length, 1);
+                }
+            
+                if (injectionType === 'INJ_PHANTOM_BYTE') {
+                    params.offset = parseMaybeHexInt(params.offset, 0);
+                    params.byte_value = parseMaybeHexInt(params.byte_value, 0);
+                    params.mode =
+                        params.mode === 'PHANTOM_RANDOM' ? 'PHANTOM_RANDOM' : 'PHANTOM_MANUAL';
+                }
+            
+                if (transport === 'TRANSPORT_MODBUS') {
+                    const cfg = params.modbus_config || DEFAULT_MODBUS_CONFIG;
+                    params.modbus_config = {
+                        slave_id: parseMaybeHexInt(cfg.slave_id, 1),
+                        func_code: parseMaybeHexInt(cfg.func_code, 6),
+                        address: parseMaybeHexInt(cfg.address, 100),
+                        value_or_quantity: parseMaybeHexInt(cfg.value_or_quantity, 50),
+                        recalculate_crc: Boolean(cfg.recalculate_crc),
+                    };
+                }
+            
+                return {
+                    ...form,
+                    transport,
+                    injectionType,
+                    injectionParams: JSON.stringify(params),
+                };
             };
 
             const [configForm, setConfigForm] = React.useState({
-                userId: user.id, profileName: '', description: '', transport: 'UART', injectionType: 'BIT_FLIP', duration: '5000', payload: '0xFF', injectionParams: PARAM_DEFAULTS['BIT_FLIP']
+                userId: user.id,
+                profileName: '',
+                description: '',
+                transport: 'TRANSPORT_UART',
+                injectionType: 'INJ_BIT_FLIP',
+                duration: '5000',
+                payload: '0xFF',
+                injectionParams: PARAM_DEFAULTS['INJ_BIT_FLIP'],
             });
 
             const fetchProfiles = async () => {
@@ -445,20 +599,44 @@
 
             React.useEffect(() => {
                 if (editingId !== null) {
-                    const profileToEdit = profiles.find(p => p.id === editingId);
+                    const profileToEdit = profiles.find((p) => p.id === editingId);
                     if (profileToEdit) {
-                        let parsedParams = PARAM_DEFAULTS[profileToEdit.injectionType] || {};
+                        let parsedParams = {};
                         try {
-                            if (profileToEdit.injectionParams) parsedParams = JSON.parse(profileToEdit.injectionParams);
-                        } catch (e) { console.error("Error parsing params", e); }
-                        
-                        setConfigForm({ ...profileToEdit, userId: user.id, injectionParams: parsedParams });
+                            if (profileToEdit.injectionParams) {
+                                parsedParams = JSON.parse(profileToEdit.injectionParams);
+                            }
+                        } catch (e) {
+                            console.error('Error parsing params', e);
+                        }
+                    
+                        const normalizedInjectionType = normalizeInjectionType(profileToEdit.injectionType);
+                        const normalizedTransport = normalizeTransport(profileToEdit.transport);
+                    
+                        setConfigForm({
+                            ...profileToEdit,
+                            userId: user.id,
+                            injectionType: normalizedInjectionType,
+                            transport: normalizedTransport,
+                            injectionParams: normalizeParamsForForm(
+                                normalizedInjectionType,
+                                parsedParams,
+                                normalizedTransport
+                            ),
+                        });
                     }
                 } else {
                     setConfigForm({
-                        userId: user.id, profileName: '', description: '', transport: 'UART', injectionType: 'BIT_FLIP', duration: '5000', payload: '0xFF', injectionParams: PARAM_DEFAULTS['BIT_FLIP']
-                    });
-                }
+                        userId: user.id,
+                        profileName: '',
+                        description: '',
+                        transport: 'TRANSPORT_UART',
+                        injectionType: 'INJ_BIT_FLIP',
+                        duration: '5000',
+                        payload: '0xFF',
+                        injectionParams: PARAM_DEFAULTS['INJ_BIT_FLIP'],
+                        });
+                    }
             }, [editingId, profiles, user.id]);
 
             React.useEffect(() => {
@@ -472,11 +650,38 @@
 
             const handleConfigChange = (e) => {
                 const { name, value } = e.target;
+
                 if (name === 'injectionType') {
-                    setConfigForm(prev => ({ ...prev, injectionType: value, injectionParams: PARAM_DEFAULTS[value] }));
-                } else {
-                    setConfigForm(prev => ({ ...prev, [name]: value }));
+                    const normalizedInjectionType = normalizeInjectionType(value);
+                    setConfigForm((prev) => ({
+                        ...prev,
+                        injectionType: normalizedInjectionType,
+                        injectionParams: normalizeParamsForForm(
+                            normalizedInjectionType,
+                            {},
+                            prev.transport
+                        ),
+                    }));
+                    return;
                 }
+
+                if (name === 'transport') {
+                    const normalizedTransport = normalizeTransport(value);
+                    setConfigForm((prev) => ({
+                        ...prev,
+                        transport: normalizedTransport,
+                        injectionParams: normalizeParamsForForm(
+                            prev.injectionType,
+                            prev.injectionParams,
+                            normalizedTransport
+                        ),
+                    }));
+                    return;
+                }
+
+                setConfigForm((prev) => ({
+                    ...prev, [name]: value 
+                }));
             };
 
             const handleParamChange = (e) => {
@@ -489,7 +694,7 @@
                 const url = editingId ? `${API_BASE_URL}/profiles/${editingId}` : `${API_BASE_URL}/profiles`;
                 const method = editingId ? 'PUT' : 'POST';
 
-                const payloadToSend = { ...configForm, injectionParams: JSON.stringify(configForm.injectionParams) };
+                const payloadToSend = buildSavePayload(configForm);
 
                 try {
                     const response = await fetch(url, {
@@ -700,17 +905,17 @@
                                                         <div className="space-y-1.5">
                                                             <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Transport</label>
                                                             <select name="transport" value={configForm.transport} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
-                                                                <option value="UART">UART</option>
-                                                                <option value="Modbus">Modbus</option>
-                                                                <option value="I2C">I2C</option>
+                                                                <option value="TRANSPORT_UART">UART</option>
+                                                                <option value="TRANSPORT_MODBUS">Modbus</option>
+                                                                <option value="TRANSPORT_I2C">I2C</option>
                                                             </select>
                                                         </div>
                                                         <div className="space-y-1.5">
                                                             <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Injection Type</label>
                                                             <select name="injectionType" value={configForm.injectionType} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
-                                                                <option value="BIT_FLIP">BIT_FLIP</option>
-                                                                <option value="BYTE_DROP">BYTE_DROP</option>
-                                                                <option value="PHANTOM_BYTE">PHANTOM_BYTE</option>
+                                                                <option value="INJ_BIT_FLIP">BIT_FLIP</option>
+                                                                <option value="INJ_BYTE_DROP">BYTE_DROP</option>
+                                                                <option value="INJ_PHANTOM_BYTE">PHANTOM_BYTE</option>
                                                             </select>
                                                         </div>
                                                         <div className="space-y-1.5">
@@ -722,39 +927,39 @@
                                                     <hr className="border-slate-100 my-8" />
 
                                                     {/* Dynamic Parameters Based on Injection Type */}
-                                                    {configForm.injectionType === 'BIT_FLIP' && (
+                                                    {configForm.injectionType === 'INJ_BIT_FLIP' && (
                                                         <div>
                                                             <h3 className="text-sm font-bold text-slate-800 mb-4">Bit Flip Parameters</h3>
                                                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                                                                 <div className="space-y-1.5">
                                                                     <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Every N Packets</label>
-                                                                    <input name="everyNPackets" value={configForm.injectionParams.everyNPackets || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
+                                                                    <input name="every_n_p" value={configForm.injectionParams.every_n_p || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
                                                                 </div>
                                                                 <div className="space-y-1.5">
                                                                     <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Bits to Drop</label>
-                                                                    <input name="bitsToDrop" value={configForm.injectionParams.bitsToDrop || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
+                                                                    <input name="bits_drop" value={configForm.injectionParams.bits_drop || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
                                                                 </div>
                                                                 <div className="space-y-1.5">
                                                                     <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Payload</label>
                                                                     <input name="payload" value={configForm.payload} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-mono" />
                                                                 </div>
                                                                 <div className="space-y-1.5">
-                                                                    <select name="mode" value={configForm.injectionParams.mode || 'Random'} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
-                                                                        <option value="Random">Random</option>
-                                                                        <option value="Sequential">Sequential</option>
+                                                                    <select name="mode" value={configForm.injectionParams.mode || 'BITFLIP_RANDOM'} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
+                                                                        <option value="BITFLIP_RANDOM">BITFLIP_RANDOM</option>
+                                                                        <option value="BITFLIP_PERIODIC">BITFLIP_PERIODIC</option>
                                                                     </select>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     )}
 
-                                                    {configForm.injectionType === 'BYTE_DROP' && (
+                                                    {configForm.injectionType === 'INJ_BYTE_DROP' && (
                                                         <div>
                                                             <h3 className="text-sm font-bold text-slate-800 mb-4">Byte Drop Parameters</h3>
                                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                                                                 <div className="space-y-1.5">
                                                                     <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Start Offset</label>
-                                                                    <input name="startOffset" value={configForm.injectionParams.startOffset || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
+                                                                    <input name="start_offset" value={configForm.injectionParams.start_offset || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm" />
                                                                 </div>
                                                                 <div className="space-y-1.5">
                                                                     <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Length</label>
@@ -768,7 +973,7 @@
                                                         </div>
                                                     )}
 
-                                                    {configForm.injectionType === 'PHANTOM_BYTE' && (
+                                                    {configForm.injectionType === 'INJ_PHANTOM_BYTE' && (
                                                         <div>
                                                             <h3 className="text-sm font-bold text-slate-800 mb-4">Phantom Byte Parameters</h3>
                                                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -778,16 +983,16 @@
                                                                 </div>
                                                                 <div className="space-y-1.5">
                                                                     <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Byte Value</label>
-                                                                    <input name="byteValue" value={configForm.injectionParams.byteValue || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-mono" />
+                                                                    <input name="byte_value" value={configForm.injectionParams.byte_value || ''} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-mono" />
                                                                 </div>
                                                                 <div className="space-y-1.5">
                                                                     <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Payload</label>
                                                                     <input name="payload" value={configForm.payload} onChange={handleConfigChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-mono" />
                                                                 </div>
                                                                 <div className="space-y-1.5">
-                                                                    <select name="mode" value={configForm.injectionParams.mode || 'Inject'} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
-                                                                        <option value="Inject">Inject</option>
-                                                                        <option value="Replace">Replace</option>
+                                                                    <select name="mode" value={configForm.injectionParams.mode || 'PHANTOM_MANUAL'} onChange={handleParamChange} className="w-full p-3 bg-slate-50 border border-slate-200 focus:border-teal-500 rounded-xl outline-none transition-all text-sm font-medium appearance-none">
+                                                                        <option value="PHANTOM_MANUAL">PHANTOM_MANUAL</option>
+                                                                        <option value="PHANTOM_RANDOM">PHANTOM_RANDOM</option>
                                                                     </select>
                                                                 </div>
                                                             </div>
