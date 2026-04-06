@@ -36,18 +36,25 @@ class SerialDevice:
 
     def connect(self, do_handshake: bool = False):
         """Attempt connection to serial port."""
+        if self._simulate:
+            self.ser = object()
+            print(f"Attempting connection to {self.port} with baud {self.baud}")
+            print("Connection successful! (simulated)")
+            return True
+
         try:
             print(f"Attempting connection to {self.port} with baud {self.baud}")
-            if self._simulate:
-                self.ser = object()
-                print("Connection successful! (simulated)")
-                return
             self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
-            print("Connection successful!")
-            self.handshake(5)
-        except (OSError, serial.SerialException) as e:
-            print("Error opening serial port: ", e)
+            time.sleep(0.2)
+
+            if do_handshake:
+                self.handshake(5)
+            return True
+        
+        except Exception as e:
+            print(f"Error opening serial port: {e}")
             self.ser = None
+            return False
 
     def is_connected(self) -> bool:
         """Verify connection to serial port."""
@@ -338,7 +345,7 @@ class SerialDevice:
         start_time = time.time()
         while time.time() - start_time < timeout:
             if self.ser.in_waiting > 0:
-                message = self.ser.read(self.ser.in_waiting).decode("utf-8").strip()
+                message = self.ser.read(self.ser.in_waiting).decode("utf-8", errors="ignore").strip()
                 if "DSI" in message:
                     print("DSI found")
                     self.write_raw(b"<ACK:DSI>")
