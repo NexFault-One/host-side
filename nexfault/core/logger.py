@@ -456,28 +456,24 @@ def get_runs(user_id: str, db: Session = Depends(get_db)):
     parser_device = SerialDevice("FAKE", 9600)
 
     for test_name, rows in temp_rows.items():
-        report = None
         profile_name = profiles.get(rows[0].profile_id, "Unknown Profile")
         created_at = str(rows[0].created_at)
 
-        for row in rows:
-            parsed = parser_device.parse_envelope(row.raw_data)
-            if isinstance(parsed, uart_data_pb2.TmiReport):
-                report = parsed
-                break
+        report = _pick_final_report(rows, parser_device)
+        if not report:
+            continue
 
-        if report:
-            runs.append({
-                "test_name": test_name,
-                "profile_name": profile_name,
-                "created_at": created_at,
-                "injection_type": uart_data_pb2.InjectionType.Name(report.injection_type),
-                "transport_type": uart_data_pb2.TransportType.Name(report.transport_type),
-                "verdict": uart_data_pb2.TestVerdict.Name(report.verdict),
-                "reason": uart_data_pb2.FailureReason.Name(report.reason),
-                "status": uart_data_pb2.ExecStatus.Name(report.status),
-                "injection_duration_ms": report.injection_duration_ms,
-            })
+        runs.append({
+            "test_name": test_name,
+            "profile_name": profile_name,
+            "created_at": created_at,
+            "injection_type": uart_data_pb2.InjectionType.Name(report.injection_type),
+            "transport_type": uart_data_pb2.TransportType.Name(report.transport_type),
+            "verdict": uart_data_pb2.TestVerdict.Name(report.verdict),
+            "reason": uart_data_pb2.FailureReason.Name(report.reason),
+            "status": uart_data_pb2.ExecStatus.Name(report.status),
+            "injection_duration_ms": report.injection_duration_ms,
+        })
 
     return runs
 # --- INJECTION EXECUTION ENDPOINT ---
@@ -634,6 +630,22 @@ def _has_verdict(report: uart_data_pb2.TmiReport) -> bool:
     if unset_verdict is not None:
         return report.verdict != unset_verdict
     return bool(str(report.verdict_message).strip())
+
+def _pick_final_report(rows, parser_device):
+    for row in rows:
+        parsed = parser_device.parse_envelope(row.raw_data)
+        if not isinstance(parsed, uart_data_pb2.TmiReport):
+            continue
+
+        if not _is_done_status(parsed.status):
+            continue
+
+        if not _has_verdict(parsed):
+            continue
+
+        return parsed
+
+    return None
 
 @app.post("/profiles/{profile_name}/run", response_model=InjectionReportResponse)
 def run_injection(
