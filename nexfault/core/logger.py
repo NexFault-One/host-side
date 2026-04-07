@@ -622,6 +622,18 @@ def _report_to_dict(report, test_name: str, profile_name: str) -> dict:
         "verdict_message": report.verdict_message,
     }
 
+def _is_done_status(status_value: int) -> bool:
+    done_value = getattr(uart_data_pb2, "STATUS_DONE", None)
+    if done_value is not None and status_value == done_value:
+        return True
+    return str(status_value).endswith("DONE")
+
+
+def _has_verdict(report: uart_data_pb2.TmiReport) -> bool:
+    unset_verdict = getattr(uart_data_pb2, "VERDICT_UNSET", None)
+    if unset_verdict is not None:
+        return report.verdict != unset_verdict
+    return bool(str(report.verdict_message).strip())
 
 @app.post("/profiles/{profile_name}/run", response_model=InjectionReportResponse)
 def run_injection(
@@ -697,7 +709,7 @@ def run_injection(
             data = [dsi.log_entry(tmi_raw)]
         else:
             dsi.write_protobuf(cmd.SerializeToString())
-            read_duration = (cmd.duration_ms / 1000.0) + 8.0
+            read_duration = max(20.0, (cmd.duration_ms / 1000.0) + 10.0)
             data = dsi.read_buffer(read_duration)
     finally:
         dsi.disconnect()
@@ -723,14 +735,29 @@ def run_injection(
     for row in data:
         raw = row[4]  # Data (Raw)
         parsed = dsi.parse_envelope(raw)
-        if isinstance(parsed, uart_data_pb2.TmiReport):
-            report = parsed
+
+        if not isinstance(parsed, uart_data_pb2.TmiReport):
+            continue
+
+        if parsed.id != cmd.id:
+            continue
+
+        if not _is_done_status(parsed.status):
+            continue
+
+        if not _has_verdict(parsed):
+            continue
+
+        report = parsed
+        break
 
     if report is None:
         raise HTTPException(
             status_code=504,
-            detail="Injection data was logged but no TmiReport "
-                   "was received from device.",
+            detail=(
+                "Injection data was logged, but no final TmiReport matched "
+                "the command id with DONE status and verdict."
+            ),
         )
 
     return _report_to_dict(report, test_name, profile_name)

@@ -337,11 +337,7 @@ class SerialDevice:
             return None
 
         if env.HasField("report"):
-            report = env.report
-            # Host-assigned ID and completion timestamp (time envelope was received)
-            # report.id = uuid.uuid4().int & 0xFFFFFFFF
-            # report.timestamp_ms = int(datetime.now().timestamp())
-            message = report
+            message = env.report
         elif env.HasField("dsi_ack"):
             message = env.dsi_ack
         elif env.HasField("dsi_command"):
