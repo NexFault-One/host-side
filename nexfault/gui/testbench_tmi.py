@@ -9,7 +9,7 @@ from typing import List, Optional, Set, Tuple
 from nexfault.protobuf_msgs.proto_msgs import uart_data_pb2
 
 
-DSI_PORT = "COM5"
+DSI_PORT = "COM8"
 DSI_BAUD = 9600
 READ_TIMEOUT_SEC = 0.05
 FRAME_MAX_LEN = 1024

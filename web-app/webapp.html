@@ -58,30 +58,110 @@
         // ==========================================
         // RUN DETAILS MODAL (NEW)
         // ==========================================
-        const RunDetailsModal = ({ run, onClose }) => {
+        const RunDetailsModal = ({ run, auth, onClose }) => {
             const [activeTab, setActiveTab] = React.useState('dashboard');
-            
-            React.useEffect(() => { lucide.createIcons(); }, [activeTab]);
+            const [logs, setLogs] = React.useState([]);
+            const [logsLoading, setLogsLoading] = React.useState(false);
+            const [logsError, setLogsError] = React.useState(null);
 
-            // Real functional download logic
-            const handleDownloadJSON = () => {
-                alert("Real export not wired yet.");
+            React.useEffect(() => { lucide.createIcons(); }, [activeTab, logs]);
+
+            const buildBasicAuthHeaders = () => {
+                if (!auth?.email || !auth?.password) return {};
+                return {
+                    Authorization: `Basic ${btoa(`${auth.email}:${auth.password}`)}`
+                };
             };
 
-            const handleDownloadCSV = () => {
-                alert("Real export not wired yet.");
+            const prettyEnum = (value, prefix) => {
+                if (!value) return '';
+                return String(value).replace(prefix, '').replaceAll('_', ' ');
+            };
+
+            const prettyTimestamp = (value) => {
+                if (!value) return '';
+                const d = new Date(value);
+                return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
+            };
+
+            React.useEffect(() => {
+                if (!run) return;
+
+                const loadLogs = async () => {
+                    setLogsLoading(true);
+                    setLogsError(null);
+                    try {
+                        const response = await fetch(
+                            `${API_BASE_URL}/profiles/${encodeURIComponent(run.profile_name)}/tests/${encodeURIComponent(run.test_name)}`,
+                            {
+                                headers: {
+                                    ...buildBasicAuthHeaders(),
+                                },
+                            }
+                        );
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(data.detail || 'Failed to load run logs');
+                        }
+
+                        setLogs(data);
+                    } catch (err) {
+                        setLogsError(err.message || 'Failed to load run logs');
+                    } finally {
+                        setLogsLoading(false);
+                    }
+                };
+
+                loadLogs();
+            }, [run]);
+
+            const handleDownload = async (format) => {
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/profiles/${encodeURIComponent(run.profile_name)}/tests/${encodeURIComponent(run.test_name)}/export?format=${format}`,
+                        {
+                            headers: {
+                                ...buildBasicAuthHeaders(),
+                            },
+                        }
+                    );
+
+                    if (!response.ok) {
+                        let detail = 'Export failed';
+                        try {
+                            const err = await response.json();
+                            detail = err.detail || detail;
+                        } catch (_) {}
+                        throw new Error(detail);
+                    }
+
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = `${run.test_name}.${format}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(blobUrl);
+                } catch (err) {
+                    alert(err.message || 'Export failed');
+                }
             };
 
             return (
                 <div className="fixed inset-0 bg-slate-900/60 z-[100] backdrop-blur-sm flex items-center justify-center p-4 md:p-8 animate-fade">
                     <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full h-[85vh] flex flex-col overflow-hidden animate-slide">
-                        {/* Modal Header */}
                         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-800 text-white shrink-0">
                             <div className="flex items-center gap-3">
                                 <Activity className="text-teal-400" />
                                 <div>
-                                    <h2 className="text-lg font-bold tracking-tight">{run.profileName}</h2>
-                                    <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">Run ID: {run.id}</p>
+                                    <h2 className="text-lg font-bold tracking-tight">{run.profile_name}</h2>
+                                    <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                                        Test Name: {run.test_name}
+                                    </p>
                                 </div>
                             </div>
                             <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
@@ -89,55 +169,86 @@
                             </button>
                         </div>
 
-                        {/* Modal Tabs */}
                         <div className="flex px-6 bg-slate-50 border-b border-slate-200 shrink-0">
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('dashboard')}
-                                className={`px-4 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'dashboard' ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                                className={`px-4 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${
+                                    activeTab === 'dashboard'
+                                        ? 'border-teal-500 text-teal-600'
+                                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                                }`}
                             >
                                 <BarChart2 /> Dashboard View
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('export')}
-                                className={`px-4 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'export' ? 'border-teal-500 text-teal-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                                className={`px-4 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors ${
+                                    activeTab === 'export'
+                                        ? 'border-teal-500 text-teal-600'
+                                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                                }`}
                             >
                                 <Download /> Export Data
                             </button>
                         </div>
 
-                        {/* Modal Content */}
                         <div className="flex-1 overflow-y-auto bg-slate-100 p-6">
-                            
-                            {/* --- DASHBOARD TAB --- */}
                             {activeTab === 'dashboard' && (
                                 <div className="space-y-6 animate-slide">
-                                    {/* Metrics Grid */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                             <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Verdict</div>
-                                            <div className={`text-lg font-black ${run.verdict === 'PASS' ? 'text-teal-600' : run.verdict === 'FAIL' ? 'text-red-600' : 'text-amber-600'}`}>
-                                                {run.verdict}
+                                            <div className={`text-lg font-black ${
+                                                run.verdict === 'VERDICT_PASS'
+                                                    ? 'text-teal-600'
+                                                    : run.verdict === 'VERDICT_FAIL'
+                                                    ? 'text-red-600'
+                                                    : 'text-amber-600'
+                                            }`}>
+                                                {prettyEnum(run.verdict, 'VERDICT_')}
                                             </div>
                                         </div>
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                             <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Duration</div>
-                                            <div className="text-lg font-black text-slate-800 font-mono">{run.duration}</div>
+                                            <div className="text-lg font-black text-slate-800 font-mono">
+                                                {run.injection_duration_ms} ms
+                                            </div>
                                         </div>
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                             <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Transport</div>
-                                            <div className="text-lg font-black text-slate-800">{run.transport}</div>
+                                            <div className="text-lg font-black text-slate-800">
+                                                {prettyEnum(run.transport_type, 'TRANSPORT_')}
+                                            </div>
                                         </div>
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Total Faults</div>
-                                            <div className="text-lg font-black text-slate-800 font-mono">{Math.floor(Math.random() * 500) + 12}</div>
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Run ID</div>
+                                            <div className="text-lg font-black text-slate-800 font-mono">{run.run_id}</div>
                                         </div>
                                     </div>
 
-                                    {/* System Logs Simulation */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Frames Sent</div>
+                                            <div className="text-lg font-black text-slate-800 font-mono">{run.frames_sent}</div>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Bytes Dropped</div>
+                                            <div className="text-lg font-black text-slate-800 font-mono">{run.bytes_dropped}</div>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Timeouts</div>
+                                            <div className="text-lg font-black text-slate-800 font-mono">{run.responses_timeout}</div>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Created</div>
+                                            <div className="text-sm font-bold text-slate-700">{prettyTimestamp(run.created_at)}</div>
+                                        </div>
+                                    </div>
+
                                     <div className="bg-slate-900 rounded-xl overflow-hidden shadow-lg border border-slate-800">
                                         <div className="px-4 py-2 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
                                             <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest">
-                                                <Terminal /> Execution Logs
+                                                <Terminal /> Logged Frames
                                             </div>
                                             <div className="flex gap-1.5">
                                                 <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
@@ -145,24 +256,35 @@
                                                 <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
                                             </div>
                                         </div>
-                                        <div className="p-4 font-mono text-xs text-slate-300 space-y-1 h-64 overflow-y-auto">
-                                            <div className="text-teal-400">[INFO] Initializing hardware interface... OK</div>
-                                            <div className="text-teal-400">[INFO] Loading profile: {run.profileName}</div>
-                                            <div className="text-slate-400">[TRACE] Establishing {run.transport} connection...</div>
-                                            <div className="text-teal-400">[INFO] Connection established.</div>
-                                            <div className="text-slate-400">[TRACE] Beginning {run.injectionType} injection sequence...</div>
-                                            <div className="text-slate-300">Targeting payload index 0x00... injected successfully.</div>
-                                            <div className="text-slate-300">Targeting payload index 0x04... injected successfully.</div>
-                                            {run.verdict === 'FAIL' && <div className="text-red-400">[ERROR] Watchdog timeout detected on target device.</div>}
-                                            {run.verdict === 'FAIL' && <div className="text-red-400">[ERROR] Handshake failed at sequence 44.</div>}
-                                            <div className="text-slate-400">[TRACE] Injection complete. Gathering telemetry...</div>
-                                            <div className="text-teal-400">[INFO] Test concluded in {run.duration}. Status: {run.status}.</div>
+
+                                        <div className="p-4 font-mono text-xs text-slate-300 space-y-2 h-72 overflow-y-auto">
+                                            {logsLoading && <div className="text-slate-400">Loading logs...</div>}
+                                            {logsError && <div className="text-red-400">{logsError}</div>}
+                                            {!logsLoading && !logsError && logs.length === 0 && (
+                                                <div className="text-slate-400">No log rows found for this run.</div>
+                                            )}
+
+                                            {!logsLoading && !logsError && logs.map((entry, idx) => {
+                                                const timestamp = entry.log_timestamp ?? entry.timestamp ?? entry["Timestamp"] ?? '';
+                                                const dataType = entry.data_type ?? entry.dataType ?? entry["Data Type"] ?? 'UNKNOWN';
+                                                const hexData = entry.hex_data ?? entry.hexData ?? entry["Data (Hex)"] ?? '';
+                                                const asciiData = entry.ascii_data ?? entry.asciiData ?? entry["Data (ASCII)"] ?? '';
+
+                                                return (
+                                                    <div key={idx} className="border-b border-slate-800/60 pb-2">
+                                                        <div className="text-teal-400">
+                                                            [{timestamp}] {dataType}
+                                                        </div>
+                                                        {hexData && <div className="text-slate-200">HEX: {hexData}</div>}
+                                                        {asciiData && <div className="text-slate-500">ASCII: {asciiData}</div>}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </div>
                             )}
 
-                            {/* --- EXPORT TAB --- */}
                             {activeTab === 'export' && (
                                 <div className="max-w-2xl mx-auto py-8 animate-slide">
                                     <div className="text-center mb-10">
@@ -171,30 +293,28 @@
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {/* JSON Export Card */}
                                         <div className="bg-white border border-slate-200 rounded-2xl p-8 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow group">
                                             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                                                 <FileJson />
                                             </div>
                                             <h4 className="font-bold text-slate-800 mb-1">JSON Payload</h4>
-                                            <p className="text-xs text-slate-500 mb-6">Complete nested data structure including metadata and raw parameter configurations.</p>
-                                            <button 
-                                                onClick={handleDownloadJSON}
+                                            <p className="text-xs text-slate-500 mb-6">Complete nested data structure including metadata and raw execution logs.</p>
+                                            <button
+                                                onClick={() => handleDownload('json')}
                                                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <Download /> Download .json
                                             </button>
                                         </div>
 
-                                        {/* CSV Export Card */}
                                         <div className="bg-white border border-slate-200 rounded-2xl p-8 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow group">
                                             <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                                                 <FileSpreadsheet />
                                             </div>
                                             <h4 className="font-bold text-slate-800 mb-1">CSV Spreadsheet</h4>
                                             <p className="text-xs text-slate-500 mb-6">Flat data format optimized for Excel, Pandas, or external visualization tools.</p>
-                                            <button 
-                                                onClick={handleDownloadCSV}
+                                            <button
+                                                onClick={() => handleDownload('csv')}
                                                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <Download /> Download .csv
@@ -208,7 +328,7 @@
                 </div>
             );
         };
-
+        
         // ==========================================
         // LOGIN COMPONENT
         // ==========================================
@@ -386,6 +506,34 @@
         // ==========================================
         // DASHBOARD COMPONENT
         // ==========================================
+        const ByteStrip = ({ label, bytes, baselineBytes = null }) => (
+            <div className="space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</div>
+                <div className="flex flex-wrap gap-2">
+                    {bytes.length === 0 ? (
+                        <div className="text-xs text-slate-400 italic">No frame available</div>
+                    ) : (
+                        bytes.map((byte, idx) => {
+                            const changed = baselineBytes && baselineBytes[idx] !== byte;
+                            return (
+                                <div
+                                    key={`${label}-${idx}`}
+                                    className={`px-2.5 py-1.5 rounded-lg text-xs font-mono border ${
+                                        changed
+                                            ? 'bg-red-50 border-red-200 text-red-700'
+                                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                                    }`}
+                                    title={`Byte ${idx}`}
+                                >
+                                    {byte}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+        );
+
         const Dashboard = ({ user, auth, onLogout }) => {
             const [activeTab, setActiveTab] = React.useState('history');
             const [profileSearch, setProfileSearch] = React.useState(''); 
@@ -444,7 +592,7 @@
                     I2C: 'TRANSPORT_I2C',
                     TRANSPORT_I2C: 'TRANSPORT_I2C',
                 };
-                return map[value] || value || 'TRANSPORT_UART';
+                return map[value] || value || 'TRANSPORT_MODBUS';
             };
 
             const normalizeInjectionType = (value) => {
@@ -456,7 +604,7 @@
                     PHANTOM_BYTE: 'INJ_PHANTOM_BYTE',
                     INJ_PHANTOM_BYTE: 'INJ_PHANTOM_BYTE',
                 };
-                return map[value] || value || 'INJ_BIT_FLIP';
+                return map[value] || value || 'INJ_BYTE_DROP';
             };
 
             const parseMaybeHexInt = (value, fallback = 0) => {
@@ -469,6 +617,103 @@
                 }
                 const parsed = parseInt(trimmed, 10);
                 return Number.isNaN(parsed) ? fallback : parsed;
+            };
+            
+            const modbusCrc16 = (bytes) => {
+                let crc = 0xFFFF;
+                for (let i = 0; i < bytes.length; i++) {
+                    crc ^= bytes[i];
+                    for (let j = 0; j < 8; j++) {
+                        if (crc & 1) {
+                            crc = (crc >> 1) ^ 0xA001;
+                        } else {
+                            crc >>= 1;
+                        }
+                    }
+                }
+                return crc & 0xFFFF;
+            };
+
+            const toHexByte = (value) => value.toString(16).toUpperCase().padStart(2, '0');
+
+            const buildBaselineModbusFrame = (profile) => {
+                if (!profile) return [];
+                if (normalizeTransport(profile.transport) !== 'TRANSPORT_MODBUS') return [];
+
+                let params = {};
+                try {
+                    params = profile.injectionParams ? JSON.parse(profile.injectionParams) : {};
+                } catch (_) {
+                    return [];
+                }
+
+                const cfg = params.modbus_config || {};
+                const slaveId = parseMaybeHexInt(cfg.slave_id, 1);
+                const funcCode = parseMaybeHexInt(cfg.func_code, 6);
+                const address = parseMaybeHexInt(cfg.address, 100);
+                const valueOrQuantity = parseMaybeHexInt(cfg.value_or_quantity, 50);
+
+                const frame = [
+                    slaveId & 0xFF,
+                    funcCode & 0xFF,
+                    (address >> 8) & 0xFF,
+                    address & 0xFF,
+                    (valueOrQuantity >> 8) & 0xFF,
+                    valueOrQuantity & 0xFF,
+                ];
+
+                const crc = modbusCrc16(frame);
+                frame.push(crc & 0xFF);
+                frame.push((crc >> 8) & 0xFF);
+
+                return frame.map(toHexByte);
+            };
+
+            const parseFrameGroups = (frameString) => {
+                if (!frameString) return [];
+                return String(frameString)
+                    .split('|')
+                    .map(group =>
+                        group
+                            .trim()
+                            .split(/\s+/)
+                            .filter(Boolean)
+                            .map((b) => b.toUpperCase())
+                    )
+                    .filter(group => group.length > 0);
+            };
+
+            const framesEqual = (a, b) => {
+                if (a.length !== b.length) return false;
+                return a.every((byte, idx) => byte === b[idx]);
+            };
+
+            const pickRepresentativeFrame = (baseline, frames) => {
+                if (!frames || frames.length === 0) return [];
+                const firstDifferent = frames.find(frame => !framesEqual(frame, baseline));
+                return firstDifferent || frames[0];
+            };
+            
+            const summarizeFrameDiff = (baseline, injected) => {
+                const maxLen = Math.max(baseline.length, injected.length);
+                const changes = [];
+
+                for (let i = 0; i < maxLen; i++) {
+                    const before = baseline[i];
+                    const after = injected[i];
+
+                    if (before === after) continue;
+
+                    if (before === undefined) {
+                        changes.push(`+${after} at byte ${i}`);
+                    } else if (after === undefined) {
+                        changes.push(`-${before} at byte ${i}`);
+                    } else {
+                        changes.push(`${before}→${after} at byte ${i}`);
+                    }
+                }
+
+                return changes;
             };
 
             const normalizeParamsForForm = (injType, rawParams, transport) => {
@@ -566,8 +811,8 @@
                 userId: user.id,
                 profileName: '',
                 description: '',
-                transport: 'TRANSPORT_UART',
-                injectionType: 'INJ_BIT_FLIP',
+                transport: 'TRANSPORT_MODBUS',
+                injectionType: 'INJ_BYTE_DROP',
                 duration: '5000',
                 payload: '0xFF',
                 injectionParams: PARAM_DEFAULTS['INJ_BIT_FLIP'],
@@ -584,6 +829,21 @@
                     console.error("Network error fetching profiles:", error);
                 }
             };
+            
+            const fetchRuns = async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/runs?user_id=${user.id}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setRuns(data);
+                    } else {
+                        setRuns([]);
+                    }
+                } catch (error) {
+                    console.error('Network error fetching runs:', error);
+                    setRuns([]);
+                }
+            };
 
             const buildBasicAuthHeaders = () => { 
                 if (!auth?.email || !auth?.password) {
@@ -596,6 +856,10 @@
             React.useEffect(() => {
                 if (activeTab === 'config' || activeTab === 'run') fetchProfiles();
             }, [activeTab]);
+
+            React.useEffect(() => {
+                if (activeTab === 'history') fetchRuns();
+            }, [activeTab, user.id]);
 
             React.useEffect(() => {
                 if (editingId !== null) {
@@ -691,32 +955,52 @@
 
             const handleSaveProfile = async (e) => {
                 e.preventDefault();
-                const url = editingId ? `${API_BASE_URL}/profiles/${editingId}` : `${API_BASE_URL}/profiles`;
-                const method = editingId ? 'PUT' : 'POST';
 
-                const payloadToSend = buildSavePayload(configForm);
+                const existingProfile = editingId
+                    ? profiles.find((p) => p.id === editingId)
+                    : null;
+
+                if (editingId && !existingProfile) {
+                    alert("Could not find the profile being edited.");
+                    return;
+                }
+
+                const url = editingId
+                    ? `${API_BASE_URL}/profiles/${encodeURIComponent(existingProfile.profileName)}`
+                    : `${API_BASE_URL}/profiles`;
+
+                const method = editingId ? 'PUT' : 'POST';
+                const payloadToSend = buildSavePayload({
+                    ...configForm,
+                    userId: String(user.id),
+                });
 
                 try {
                     const response = await fetch(url, {
-                        method: method,
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payloadToSend) 
+                        method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(editingId ? buildBasicAuthHeaders() : {}),
+                        },
+                        body: JSON.stringify(payloadToSend),
                     });
 
-                    if (response.ok) {
-                        await fetchProfiles(); 
-                        if (!editingId) {
-                            const newProfile = await response.json();
-                            if (newProfile.id) setEditingId(newProfile.id); 
-                        }
-                    } else {
-                        alert("Error saving profile.");
+                    const data = await response.json().catch(() => null);
+
+                    if (!response.ok) {
+                        throw new Error(data?.detail || "Error saving profile.");
+                    }
+
+                    await fetchProfiles();
+
+                    if (!editingId && data?.id) {
+                        setEditingId(data.id);
                     }
                 } catch (error) {
-                    alert("Network error.");
+                    alert(error.message || "Network error.");
                 }
             };
-
+            
             const handleRunSavedProfile = async () => {
                 if (!runForm.selectedProfileName) return;
 
@@ -749,6 +1033,7 @@
                     if (!response.ok) {
                         throw new Error(data.detail || 'Run failed');
                     }
+                    await fetchRuns();
                     setRunForm(prev => ({
                         ...prev,
                         running: false,
@@ -763,20 +1048,36 @@
                 }
             };
 
-            const handleDeleteProfile = async (id, e) => {
-                e.stopPropagation();
-                if (!window.confirm("Are you sure you want to delete this profile?")) return;
-                try {
-                    const response = await fetch(`${API_BASE_URL}/profiles/${id}`, { method: 'DELETE' });
-                    if (response.ok) {
-                        if (editingId === id) setEditingId(null);
-                        await fetchProfiles();
-                    }
-                } catch (error) {
-                    console.error("Failed to delete profile:", error);
-                }
-            };
+            const handleDeleteProfile = async (profile, e) => {
+            e.stopPropagation();
+            if (!window.confirm("Are you sure you want to delete this profile?")) return;
 
+            try {
+                const response = await fetch(
+                    `${API_BASE_URL}/profiles/${encodeURIComponent(profile.profileName)}`,
+                    {
+                        method: 'DELETE',
+                        headers: {
+                            ...buildBasicAuthHeaders(),
+                        },
+                    }
+                );
+
+                if (!response.ok) {
+                    const data = await response.json().catch(() => null);
+                    throw new Error(data?.detail || "Failed to delete profile.");
+                }
+
+                if (editingId === profile.id) {
+                    setEditingId(null);
+                }
+
+                await fetchProfiles();
+            } catch (error) {
+                alert(error.message || "Failed to delete profile.");
+            }
+        };
+                    
             const filteredProfiles = profiles.filter(p => 
                 (p.profileName || '').toLowerCase().includes(profileSearch.toLowerCase()) || 
                 (p.description || '').toLowerCase().includes(profileSearch.toLowerCase())
@@ -785,8 +1086,12 @@
             return (
                 <div className="min-h-screen flex bg-slate-50 animate-slide">
                     
-                    {false && selectedRun && (
-                        <RunDetailsModal run={selectedRun} onClose={() => setSelectedRun(null)} />
+                    {selectedRun && (
+                        <RunDetailsModal
+                            run={selectedRun}
+                            auth={auth}
+                            onClose={() => setSelectedRun(null)}
+                        />
                     )}
 
                     <aside className="w-64 bg-slate-800 text-slate-300 flex flex-col hidden md:flex shrink-0">
@@ -832,14 +1137,64 @@
                         <div className={`flex-1 overflow-hidden flex flex-col ${activeTab === 'history' ? 'p-8' : ''}`}>
                             
                             {activeTab === 'history' && (
-                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center justify-center animate-slide">
-                                    <div className="text-center max-w-md px-8">
-                                        <div className="text-lg font-bold text-slate-800 mb-2">No real test runs yet</div>
-                                        <p className="text-sm text-slate-500 leading-relaxed">
-                                            Test History is now disconnected from mock data.
-                                            Real runs will appear here once we wire profile execution to the backend run endpoint.
-                                        </p>
-                                    </div>
+                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden animate-slide">
+                                    {runs.length === 0 ? (
+                                        <div className="h-full flex items-center justify-center">
+                                            <div className="text-center max-w-md px-8">
+                                                <div className="text-lg font-bold text-slate-800 mb-2">No stored runs yet</div>
+                                                <p className="text-sm text-slate-500 leading-relaxed">
+                                                    Run a test from the Run Test tab and completed executions will appear here.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-auto h-full">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                                                    <tr className="text-left">
+                                                        <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Test Name</th>
+                                                        <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Profile</th>
+                                                        <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Transport</th>
+                                                        <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Injection</th>
+                                                        <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Duration</th>
+                                                        <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</th>
+                                                        <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Verdict</th>
+                                                        <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Created</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {runs.map((run, idx) => (
+                                                        <tr
+                                                            key={`${run.test_name}-${idx}`}
+                                                            onClick={() => setSelectedRun(run)}
+                                                            className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                                                        >
+                                                            <td className="px-5 py-4 font-mono text-xs text-slate-800">{run.test_name}</td>
+                                                            <td className="px-5 py-4 font-medium text-slate-700">{run.profile_name}</td>
+                                                            <td className="px-5 py-4 text-slate-600">{String(run.transport_type).replace('TRANSPORT_', '')}</td>
+                                                            <td className="px-5 py-4 text-slate-600">{String(run.injection_type).replace('INJ_', '')}</td>
+                                                            <td className="px-5 py-4 font-mono text-slate-600">{run.injection_duration_ms} ms</td>
+                                                            <td className="px-5 py-4 text-slate-600">{String(run.status).replace('STATUS_', '')}</td>
+                                                            <td className="px-5 py-4">
+                                                                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                                                                    run.verdict === 'VERDICT_PASS'
+                                                                        ? 'bg-teal-50 text-teal-700'
+                                                                        : run.verdict === 'VERDICT_FAIL'
+                                                                        ? 'bg-red-50 text-red-700'
+                                                                        : 'bg-amber-50 text-amber-700'
+                                                                }`}>
+                                                                    {String(run.verdict).replace('VERDICT_', '')}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-5 py-4 text-slate-500 text-xs">
+                                                                {new Date(run.created_at).toLocaleString()}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -869,7 +1224,7 @@
                                                 <div key={p.id} onClick={() => setEditingId(p.id)} className={`w-full text-left p-4 rounded-xl transition-all border cursor-pointer ${editingId === p.id ? 'bg-slate-800 border-slate-800 text-white shadow-lg shadow-slate-900/10' : 'bg-white border-slate-100 hover:border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
                                                     <div className="flex justify-between items-start mb-1">
                                                         <div className="font-bold text-sm truncate pr-2">{p.profileName || 'Unnamed Profile'}</div>
-                                                        <button onClick={(e) => handleDeleteProfile(p.id, e)} className={`p-1.5 -mr-1.5 -mt-1.5 rounded-md transition-colors ${editingId === p.id ? 'text-slate-400 hover:text-red-400 hover:bg-slate-700' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}><Trash2 /></button>
+                                                        <button onClick={(e) => handleDeleteProfile(p, e)} className={`p-1.5 -mr-1.5 -mt-1.5 rounded-md transition-colors ${editingId === p.id ? 'text-slate-400 hover:text-red-400 hover:bg-slate-700' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}><Trash2 /></button>
                                                     </div>
                                                     <div className={`text-xs line-clamp-2 leading-relaxed ${editingId === p.id ? 'text-slate-400' : 'text-slate-500'}`}>{p.description || 'No description provided.'}</div>
                                                 </div>
@@ -1005,8 +1360,8 @@
                                 </div>
                             )}
                             {activeTab === 'run' && (
-                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm p-8 animate-slide">
-                                    <div className="max-w-3xl space-y-6">
+                                <div className="flex-1 overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-sm p-8 animate-slide">
+                                <div className="max-w-3xl space-y-6 pb-10">
                                     <div>
                                         <h2 className="text-2xl font-black text-slate-800">Run Test</h2>
                                         <p className="text-sm text-slate-500 mt-1">
@@ -1086,6 +1441,84 @@
                                         <pre className="p-4 text-xs text-slate-200 overflow-x-auto whitespace-pre-wrap">
                                             {JSON.stringify(runForm.result, null, 2)}
                                         </pre>
+                                        {runForm.result && (() => {
+                                        const selectedProfile = profiles.find(
+                                            (p) => p.profileName === runForm.selectedProfileName
+                                        );
+
+                                        const baselineFrame = buildBaselineModbusFrame(selectedProfile);
+                                        const transmittedFrames = parseFrameGroups(runForm.result.final_frame);
+                                        const representativeFrame = pickRepresentativeFrame(baselineFrame, transmittedFrames);
+                                        const diffSummary = summarizeFrameDiff(baselineFrame, representativeFrame);
+
+                                        if (
+                                            normalizeTransport(selectedProfile?.transport || '') !== 'TRANSPORT_MODBUS' ||
+                                            transmittedFrames.length === 0
+                                        ) {
+                                            return null;
+                                        }
+
+                                        const reportLooksInconsistent =
+                                            runForm.result.injection_type === 'INJ_BIT_FLIP' &&
+                                            framesEqual(representativeFrame, baselineFrame) &&
+                                            Number(runForm.result.bits_flipped || 0) === 0;
+
+                                        return (
+                                            <div className="mt-6 bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-5">
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-slate-800">Frame Impact</h3>
+                                                    <p className="text-sm text-slate-500">
+                                                        Expected baseline RTU frame versus injected frame actually sent by DSI.
+                                                    </p>
+                                                </div>
+
+                                                <div className="grid gap-5">
+                                                    <ByteStrip label="Baseline frame" bytes={baselineFrame} />
+                                                    <ByteStrip
+                                                        label="Representative transmitted frame"
+                                                        bytes={representativeFrame}
+                                                        baselineBytes={baselineFrame}
+                                                    />
+                                                </div>
+                                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                                                    <div>
+                                                        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                                                            Change summary
+                                                        </div>
+                                                        {diffSummary.length === 0 ? (
+                                                            <div className="text-sm text-slate-500">No byte-level difference detected in the representative frame.</div>
+                                                        ) : (
+                                                            <ul className="text-sm text-slate-700 space-y-1">
+                                                                {diffSummary.map((item, idx) => (
+                                                                    <li key={idx} className="font-mono">{item}</li>
+                                                                ))}
+                                                            </ul>
+                                                        )}
+                                                    </div>
+                                                
+                                                    <div className="pt-2 border-t border-slate-200 text-xs text-slate-500">
+                                                        Frames captured in report: <span className="font-bold">{transmittedFrames.length}</span>
+                                                    </div>
+                                                
+                                                    <div className="text-xs text-slate-500 font-mono break-all">
+                                                        {runForm.result.final_frame}
+                                                    </div>
+                                                
+                                                    {reportLooksInconsistent && (
+                                                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
+                                                            TMI report did not include a visibly mutated transmitted frame for this Bit Flip run.
+                                                            Use the UUT serial monitor as the ground-truth visual for this test.
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="text-xs text-slate-500">
+                                                    CRC recalculated: <span className="font-bold">{String(runForm.result.crc_recalculated)}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                                                            
                                         </div>
                                     )}
                                     </div>

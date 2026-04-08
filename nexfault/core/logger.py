@@ -200,6 +200,8 @@ class InjectionReportResponse(BaseModel):
     verdict: str
     reason: str
     verdict_message: str
+    crc_recalculated: bool | None = None
+    final_frame: str | None = None
 
 class RunHistoryItem(BaseModel): # real history source, not just per-test raw logs
     test_name: str
@@ -510,11 +512,17 @@ def normalize_transport(value: str) -> str:
     }
     return mapping.get(value, value)
 
+_COMMAND_SEQ = 0
+
+def _next_command_id() -> int:
+    global _COMMAND_SEQ
+    _COMMAND_SEQ = (_COMMAND_SEQ % 1000000) + 1
+    return _COMMAND_SEQ
 
 def _build_command_from_profile(profile: Profile) -> uart_data_pb2.DsiCommand:
     """Build a DsiCommand protobuf message from a saved profile."""
     cmd = uart_data_pb2.DsiCommand()
-    cmd.id = uuid.uuid4().int & 0xFFFFFFFF
+    cmd.id = _next_command_id()
     cmd.cmd = uart_data_pb2.CommandType.CMD_INJECT
 
     normalized_inj = normalize_injection_type(profile.injection_type)
@@ -616,6 +624,8 @@ def _report_to_dict(report, test_name: str, profile_name: str) -> dict:
         "verdict": uart_data_pb2.TestVerdict.Name(report.verdict),
         "reason": uart_data_pb2.FailureReason.Name(report.reason),
         "verdict_message": report.verdict_message,
+        "crc_recalculated": getattr(report, "crc_recalculated", None),
+        "final_frame": getattr(report, "final_frame", ""),
     }
 
 def _is_done_status(status_value: int) -> bool:
@@ -665,6 +675,10 @@ def run_injection(
     # Build the DsiCommand from profile parameters
     try:
         cmd = _build_command_from_profile(profile)
+        print(
+            f"[RUN] Built command id={cmd.id} "
+            f"inj={cmd.inj_type} transport={cmd.transport} duration_ms={cmd.duration_ms}"
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -750,6 +764,12 @@ def run_injection(
 
         if not isinstance(parsed, uart_data_pb2.TmiReport):
             continue
+
+        print(
+            f"[RUN] Candidate report id={parsed.id} run_id={parsed.run_id} "
+            f"status={parsed.status} verdict={parsed.verdict} "
+            f"frames_sent={parsed.frames_sent}"
+        )
 
         if parsed.id != cmd.id:
             continue
